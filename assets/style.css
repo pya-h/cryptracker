@@ -150,6 +150,64 @@ a:hover { color: var(--primary-h); }
     color: #fff; font-size: .75rem; font-weight: 700;
 }
 
+/* ── Mode Toggle ──────────────────────────────────────────── */
+
+.mode-toggle-form { margin: 0; }
+
+.mode-toggle {
+    display: flex; align-items: center; gap: .5rem;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: .3rem .7rem .3rem .8rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    color: var(--text);
+    font-family: inherit;
+}
+
+.mode-toggle:hover {
+    border-color: var(--primary);
+    background: rgba(124,106,239,.08);
+}
+
+.mode-label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-muted);
+    min-width: 52px;
+    text-align: center;
+}
+
+.mode-switch {
+    display: flex;
+    align-items: center;
+    width: 32px; height: 18px;
+    background: rgba(255,255,255,.1);
+    border-radius: 10px;
+    padding: 2px;
+    transition: background var(--transition);
+    position: relative;
+}
+
+.mode-switch.active {
+    background: linear-gradient(135deg, var(--primary), #9584ff);
+}
+
+.mode-knob {
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform var(--transition);
+    box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+
+.mode-switch.active .mode-knob {
+    transform: translateX(14px);
+}
+
 /* ── Buttons ──────────────────────────────────────────────── */
 
 .btn {

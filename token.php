@@ -30,69 +30,21 @@ $rank      = $quote['rank'] ?? 0;
 $allTxAsc = dbGetTransactions($tokenId);
 $allTx    = dbGetTransactionsDesc($tokenId);
 
-$totalBought = 0;
-$totalSpent  = 0;
-$totalSold   = 0;
-$realizedPL  = 0;
+$mode = plMode();
+$pl   = calcTokenPL($tokenId, $price, $mode);
 
-foreach ($allTxAsc as $t) {
-    if ($t['type'] === 'buy') {
-        $totalBought += $t['amount'];
-        $totalSpent  += $t['total_value'];
-    } else {
-        $totalSold   += $t['amount'];
-        $realizedPL  += $t['realized_pl'];
-    }
-}
-
-$holdings  = max(0, $totalBought - $totalSold);
-$avgBuy    = ($totalBought > 0) ? ($totalSpent / $totalBought) : 0;
-$costBasis = $holdings * $avgBuy;
-
-$currentValue = $holdings * $price;
-$unrealizedPL = $currentValue - $costBasis;
-$totalPL      = $realizedPL + $unrealizedPL;
+$holdings     = $pl['holdings'];
+$avgBuy       = $pl['avg_buy'];
+$costBasis    = $pl['cost_basis'];
+$currentValue = $pl['current_value'];
+$realizedPL   = $pl['realized_pl'];
+$unrealizedPL = $pl['unrealized_pl'];
+$totalPL      = $pl['total_pl'];
+$totalSpent   = $pl['total_spent'];
+$plTimeline   = $pl['timeline'];
 
 $plPercent    = ($costBasis > 0) ? (($unrealizedPL / $costBasis) * 100) : 0;
 $totalPercent = ($totalSpent > 0) ? (($totalPL / $totalSpent) * 100) : 0;
-
-// Build P/L timeline: running weighted-average cost, cumulative P/L at each tx
-$plTimeline  = [];
-$runHoldings = 0;
-$runSpent    = 0;
-$runRealized = 0;
-$runBuyAmt   = 0;
-$runBuyCost  = 0;
-
-foreach ($allTxAsc as $tx) {
-    if ($tx['type'] === 'buy') {
-        $runBuyAmt  += $tx['amount'];
-        $runBuyCost += $tx['total_value'];
-        $runHoldings += $tx['amount'];
-    } else {
-        $runHoldings -= $tx['amount'];
-        $runRealized += $tx['realized_pl'];
-    }
-
-    $runAvg        = ($runBuyAmt > 0) ? ($runBuyCost / $runBuyAmt) : 0;
-    $runCostBasis  = $runHoldings * $runAvg;
-    $runCurrValue  = $runHoldings * $tx['price_per_unit'];
-    $runUnrealized = $runCurrValue - $runCostBasis;
-    $runTotalPL    = $runRealized + $runUnrealized;
-
-    $plTimeline[] = [
-        'date'        => $tx['created_at'],
-        'type'        => $tx['type'],
-        'amount'      => $tx['amount'],
-        'ppu'         => $tx['price_per_unit'],
-        'total'       => $tx['total_value'],
-        'realized'    => $tx['realized_pl'],
-        'holdings'    => $runHoldings,
-        'avg_cost'    => $runAvg,
-        'cum_realized'=> $runRealized,
-        'cum_total_pl'=> $runTotalPL,
-    ];
-}
 
 $graphData = json_encode(array_map(fn($p) => [
     'date' => $p['date'],
@@ -296,6 +248,13 @@ layoutNav($user);
             <?php if (empty($allTx)): ?>
                 <p class="empty-state">No transactions yet. Record a buy above!</p>
             <?php else: ?>
+            <?php
+                $txPLMap = [];
+                foreach ($plTimeline as $row) {
+                    $key = $row['date'] . '|' . $row['type'] . '|' . $row['amount'];
+                    $txPLMap[$key] = $row['realized'];
+                }
+            ?>
             <div class="table-responsive">
                 <table class="token-table">
                     <thead>
@@ -310,15 +269,19 @@ layoutNav($user);
                     </thead>
                     <tbody>
                         <?php foreach ($allTx as $tx): ?>
+                        <?php
+                            $txKey = $tx['created_at'] . '|' . $tx['type'] . '|' . $tx['amount'];
+                            $txPL  = $txPLMap[$txKey] ?? $tx['realized_pl'];
+                        ?>
                         <tr>
                             <td><?= date('M d, Y H:i', strtotime($tx['created_at'])) ?></td>
                             <td><span class="badge badge-<?= $tx['type'] ?>"><?= ucfirst($tx['type']) ?></span></td>
                             <td><?= formatCrypto($tx['amount']) ?></td>
                             <td>$<?= number_format($tx['price_per_unit'], 6) ?></td>
                             <td><?= formatUSD($tx['total_value']) ?></td>
-                            <td class="<?= plClass($tx['realized_pl']) ?>">
+                            <td class="<?= plClass($txPL) ?>">
                                 <?php if ($tx['type'] === 'sell'): ?>
-                                    <?= formatPL($tx['realized_pl']) ?>
+                                    <?= formatPL($txPL) ?>
                                 <?php else: ?>
                                     –
                                 <?php endif; ?>

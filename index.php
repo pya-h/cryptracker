@@ -11,6 +11,7 @@ $user = requireAuth();
 $tokens = dbGetUserTokens($user['id']);
 $cmcIds = array_column($tokens, 'cmc_id');
 $quotes = $cmcIds ? apiGetQuotes($cmcIds) : [];
+$mode = plMode();
 $summaries     = [];
 $totalRealPL   = 0;
 $totalImagPL   = 0;
@@ -22,40 +23,24 @@ foreach ($tokens as $tk) {
     $price    = $quotes[$cmcId]['price'] ?? 0;
     $change24 = $quotes[$cmcId]['percent_change_24h'] ?? 0;
 
-    $buys  = dbGetTransactions($id, 'buy');
-    $sells = dbGetTransactions($id, 'sell');
-
-    $totalBought  = 0;
-    $totalSpent   = 0;
-    $totalSold    = 0;
-    $realizedPL   = 0;
-
-    foreach ($buys as $b)  { $totalBought += $b['amount']; $totalSpent += $b['total_value']; }
-    foreach ($sells as $s) { $totalSold   += $s['amount']; $realizedPL += $s['realized_pl']; }
-
-    $holdings = max(0, $totalBought - $totalSold);
-    $avgBuy   = ($totalBought > 0) ? ($totalSpent / $totalBought) : 0;
-
-    $currentValue  = $holdings * $price;
-    $costBasis     = $holdings * $avgBuy;
-    $unrealizedPL  = $currentValue - $costBasis;
+    $pl = calcTokenPL($id, $price, $mode);
 
     $summaries[] = [
         'token'       => $tk,
         'price'       => $price,
         'change24'    => $change24,
-        'holdings'    => $holdings,
-        'avgBuy'      => $avgBuy,
-        'invested'    => $costBasis,
-        'currentVal'  => $currentValue,
-        'realizedPL'  => $realizedPL,
-        'unrealizedPL'=> $unrealizedPL,
-        'totalPL'     => $realizedPL + $unrealizedPL,
+        'holdings'    => $pl['holdings'],
+        'avgBuy'      => $pl['avg_buy'],
+        'invested'    => $pl['cost_basis'],
+        'currentVal'  => $pl['current_value'],
+        'realizedPL'  => $pl['realized_pl'],
+        'unrealizedPL'=> $pl['unrealized_pl'],
+        'totalPL'     => $pl['total_pl'],
     ];
 
-    $totalRealPL   += $realizedPL;
-    $totalImagPL   += $unrealizedPL;
-    $totalInvested += $costBasis;
+    $totalRealPL   += $pl['realized_pl'];
+    $totalImagPL   += $pl['unrealized_pl'];
+    $totalInvested += $pl['cost_basis'];
 }
 
 $totalPL = $totalRealPL + $totalImagPL;
