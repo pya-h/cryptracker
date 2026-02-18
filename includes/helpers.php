@@ -45,26 +45,31 @@ function plClass(float $v): string
 }
 
 /** +$100.00 or -$100.00 sign placement */
-function formatPL(float $v, int $decimals = 2): string
+function formatPL(float $v, int $decimals = -1): string
 {
+    if ($decimals < 0) $decimals = precision();
     if ($v >= 0) {
         return '+$' . number_format($v, $decimals);
     }
     return '-$' . number_format(abs($v), $decimals);
 }
 
-function formatCrypto(float $amount, int $decimals = 8): string
+function formatCrypto(float $amount, int $decimals = -1): string
 {
-    return rtrim(rtrim(number_format($amount, $decimals), '0'), '.');
+    if ($decimals < 0) $decimals = precision();
+    $max = max($decimals, 8);
+    return rtrim(rtrim(number_format($amount, $max), '0'), '.');
 }
 
-function formatUSD(float $v, int $decimals = 2): string
+function formatUSD(float $v, int $decimals = -1): string
 {
+    if ($decimals < 0) $decimals = precision();
     return '$' . number_format($v, $decimals);
 }
 
-function formatPercent(float $v, int $decimals = 2): string
+function formatPercent(float $v, int $decimals = -1): string
 {
+    if ($decimals < 0) $decimals = precision();
     $sign = $v >= 0 ? '+' : '';
     return $sign . number_format($v, $decimals) . '%';
 }
@@ -72,11 +77,12 @@ function formatPercent(float $v, int $decimals = 2): string
 /** Abbreviate large numbers: 1.2B, 340.5M, 12.3K */
 function formatBigNum(float $v): string
 {
-    if ($v >= 1e12) return '$' . number_format($v / 1e12, 2) . 'T';
-    if ($v >= 1e9)  return '$' . number_format($v / 1e9, 2) . 'B';
-    if ($v >= 1e6)  return '$' . number_format($v / 1e6, 2) . 'M';
-    if ($v >= 1e3)  return '$' . number_format($v / 1e3, 2) . 'K';
-    return '$' . number_format($v, 2);
+    $p = precision();
+    if ($v >= 1e12) return '$' . number_format($v / 1e12, $p) . 'T';
+    if ($v >= 1e9)  return '$' . number_format($v / 1e9, $p) . 'B';
+    if ($v >= 1e6)  return '$' . number_format($v / 1e6, $p) . 'M';
+    if ($v >= 1e3)  return '$' . number_format($v / 1e3, $p) . 'K';
+    return '$' . number_format($v, $p);
 }
 
 /** Abbreviate supply numbers without currency sign */
@@ -98,6 +104,16 @@ function e(string $s): string
 function plMode(): string
 {
     return $_SESSION['pl_mode'] ?? 'avg';
+}
+
+function precision(): int
+{
+    return (int) ($_SESSION['precision'] ?? 2);
+}
+
+function theme(): string
+{
+    return $_SESSION['theme'] ?? 'dark';
 }
 
 /**
@@ -289,7 +305,9 @@ function renderFlashes(): string
 function layoutHead(string $title, bool $authPage = false): void
 {
     sendSecurityHeaders();
-    $bodyClass = $authPage ? 'class="auth-page"' : '';
+    $themeClass = theme() === 'light' ? 'theme-light' : '';
+    $classes = trim(($authPage ? 'auth-page' : '') . ' ' . $themeClass);
+    $bodyAttr = $classes ? 'class="' . $classes . '"' : '';
     echo '<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -302,14 +320,11 @@ function layoutHead(string $title, bool $authPage = false): void
     <link rel="stylesheet" href="assets/style.css?v=' . filemtime(__DIR__ . '/../assets/style.css') . '">
     <meta name="csrf-token" content="' . e(csrfToken()) . '">
 </head>
-<body ' . $bodyClass . '>';
+<body ' . $bodyAttr . '>';
 }
 
 function layoutNav(array $user): void
 {
-    $mode = plMode();
-    $isExact = $mode === 'fifo';
-    $modeLabel = $isExact ? 'Exact' : 'Average';
     $redirect = $_SERVER['REQUEST_URI'] ?? 'index.php';
     $redirect = basename($redirect);
     if (!preg_match('/^(index\.php|token\.php\?id=\d+)$/', $redirect)) {
@@ -321,23 +336,118 @@ function layoutNav(array $user): void
             <span class="brand-icon">◈</span> ' . e(APP_NAME) . '
         </a>
         <div class="nav-right">
-            <form method="POST" action="toggle_mode.php" class="mode-toggle-form">
-                ' . csrfField() . '
-                <input type="hidden" name="redirect" value="' . e($redirect) . '">
-                <button type="submit" class="mode-toggle" data-tooltip="P/L calculation mode">
-                    <span class="mode-label">' . $modeLabel . '</span>
-                    <span class="mode-switch ' . ($isExact ? 'active' : '') . '">
-                        <span class="mode-knob"></span>
-                    </span>
+            <div class="user-menu-wrapper">
+                <button type="button" class="nav-user-btn" id="userMenuBtn">
+                    <span class="user-avatar">' . strtoupper(e($user['username'])[0]) . '</span>
+                    <span class="user-name">' . e($user['username']) . '</span>
+                    <span class="user-caret">▾</span>
                 </button>
-            </form>
-            <span class="nav-user">
-                <span class="user-avatar">' . strtoupper(e($user['username'])[0]) . '</span>
-                ' . e($user['username']) . '
-            </span>
-            <a href="logout.php" class="btn btn-sm btn-outline">Logout</a>
+                <div class="user-menu" id="userMenu">
+                    <button type="button" class="user-menu-item" id="openCustomize">
+                        <span class="menu-icon">⚙</span> Customize
+                    </button>
+                    <button type="button" class="user-menu-item" id="exportCsv">
+                        <span class="menu-icon">⤓</span> Export to CSV
+                    </button>
+                    <div class="user-menu-divider"></div>
+                    <a href="logout.php" class="user-menu-item menu-danger">
+                        <span class="menu-icon">⏻</span> Logout
+                    </a>
+                </div>
+            </div>
         </div>
     </nav>';
+
+    layoutCustomizeModal($user, $redirect);
+}
+
+function layoutCustomizeModal(array $user, string $redirect): void
+{
+    $mode = plMode();
+    $isExact = $mode === 'fifo';
+    $modeLabel = $isExact ? 'Exact' : 'Average';
+    $thm = theme();
+    $prec = precision();
+
+    echo '<div class="modal-overlay" id="customizeOverlay">
+    <div class="modal animate-scale-in">
+        <div class="modal-header">
+            <h2>Customize</h2>
+            <button type="button" class="modal-close" id="closeCustomize">&times;</button>
+        </div>
+        <div class="modal-body">
+
+            <div class="setting-group">
+                <span class="setting-label">P/L Calculation Mode</span>
+                <form method="POST" action="toggle_mode.php" class="mode-toggle-form">
+                    ' . csrfField() . '
+                    <input type="hidden" name="redirect" value="' . e($redirect) . '">
+                    <button type="submit" class="mode-toggle" data-tooltip="P/L calculation mode">
+                        <span class="mode-label">' . $modeLabel . '</span>
+                        <span class="mode-switch ' . ($isExact ? 'active' : '') . '">
+                            <span class="mode-knob"></span>
+                        </span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="setting-group">
+                <span class="setting-label">Theme</span>
+                <form method="POST" action="save_settings.php" class="mode-toggle-form">
+                    ' . csrfField() . '
+                    <input type="hidden" name="action" value="theme">
+                    <input type="hidden" name="redirect" value="' . e($redirect) . '">
+                    <button type="submit" class="mode-toggle">
+                        <span class="mode-label">' . ($thm === 'light' ? 'Light' : 'Dark') . '</span>
+                        <span class="mode-switch ' . ($thm === 'light' ? 'active' : '') . '">
+                            <span class="mode-knob"></span>
+                        </span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="setting-group">
+                <span class="setting-label">Precision: <strong id="precVal">' . $prec . '</strong> digits</span>
+                <form method="POST" action="save_settings.php" class="precision-form" id="precisionForm">
+                    ' . csrfField() . '
+                    <input type="hidden" name="action" value="precision">
+                    <input type="hidden" name="redirect" value="' . e($redirect) . '">
+                    <input type="range" name="precision" min="2" max="10" value="' . $prec . '" class="precision-slider" id="precSlider">
+                    <div class="precision-range-labels"><span>2</span><span>10</span></div>
+                    <button type="submit" class="btn btn-primary btn-sm" style="margin-top:.5rem">Apply</button>
+                </form>
+            </div>
+
+            <div class="setting-divider"></div>
+
+            <div class="setting-group">
+                <span class="setting-label">Change Username</span>
+                <form method="POST" action="save_settings.php" class="settings-form">
+                    ' . csrfField() . '
+                    <input type="hidden" name="action" value="username">
+                    <input type="hidden" name="redirect" value="' . e($redirect) . '">
+                    <input type="text" name="new_username" placeholder="New username" required
+                           minlength="3" pattern="[a-zA-Z0-9_\-]{3,30}"
+                           title="3-30 characters: letters, numbers, _ or -">
+                    <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                </form>
+            </div>
+
+            <div class="setting-group">
+                <span class="setting-label">Change Password</span>
+                <form method="POST" action="save_settings.php" class="settings-form">
+                    ' . csrfField() . '
+                    <input type="hidden" name="action" value="password">
+                    <input type="hidden" name="redirect" value="' . e($redirect) . '">
+                    <input type="password" name="old_password" placeholder="Current password" required>
+                    <input type="password" name="new_password" placeholder="New password (min 6 chars)" required minlength="6">
+                    <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                </form>
+            </div>
+
+        </div>
+    </div>
+</div>';
 }
 
 function layoutFooter(): void

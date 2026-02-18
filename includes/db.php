@@ -190,6 +190,22 @@ function dbGetTokenStats(int $userTokenId): array
     ];
 }
 
+function dbUpdateUser(int $id, array $fields): bool
+{
+    $allowed = ['username', 'email', 'password_hash'];
+    $users = readTable('users');
+    foreach ($users as &$u) {
+        if ($u['id'] === $id) {
+            foreach ($fields as $k => $v) {
+                if (in_array($k, $allowed, true)) $u[$k] = $v;
+            }
+            writeTable('users', $users);
+            return true;
+        }
+    }
+    return false;
+}
+
 function dbPurgeAll(): void
 {
     foreach (['users', 'user_tokens', 'transactions'] as $t) {

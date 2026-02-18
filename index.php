@@ -45,11 +45,13 @@ foreach ($tokens as $tk) {
 
 $totalPL = $totalRealPL + $totalImagPL;
 
+$tblPrec = min(precision(), 6);
+
 layoutHead('Dashboard');
 layoutNav($user);
 ?>
 
-    <main class="container">
+    <main class="container" data-page="dashboard">
 
         <?= renderFlashes() ?>
 
@@ -113,21 +115,21 @@ layoutNav($user);
                                 <strong><?= e($s['token']['symbol']) ?></strong>
                                 <small><?= e($s['token']['name']) ?></small>
                             </td>
-                            <td><?= formatUSD($s['price']) ?></td>
+                            <td><?= formatUSD($s['price'], $tblPrec) ?></td>
                             <td class="<?= plClass($s['change24']) ?>">
-                                <?= formatPercent($s['change24']) ?>
+                                <?= formatPercent($s['change24'], $tblPrec) ?>
                             </td>
-                            <td><?= formatCrypto($s['holdings']) ?></td>
-                            <td><?= formatUSD($s['avgBuy']) ?></td>
-                            <td><?= formatUSD($s['currentVal']) ?></td>
+                            <td><?= formatCrypto($s['holdings'], $tblPrec) ?></td>
+                            <td><?= formatUSD($s['avgBuy'], $tblPrec) ?></td>
+                            <td><?= formatUSD($s['currentVal'], $tblPrec) ?></td>
                             <td class="<?= plClass($s['realizedPL']) ?>">
-                                <?= formatPL($s['realizedPL']) ?>
+                                <?= formatPL($s['realizedPL'], $tblPrec) ?>
                             </td>
                             <td class="<?= plClass($s['unrealizedPL']) ?>">
-                                <?= formatPL($s['unrealizedPL']) ?>
+                                <?= formatPL($s['unrealizedPL'], $tblPrec) ?>
                             </td>
                             <td class="<?= plClass($s['totalPL']) ?>">
-                                <?= formatPL($s['totalPL']) ?>
+                                <?= formatPL($s['totalPL'], $tblPrec) ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>

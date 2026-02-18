@@ -55,7 +55,7 @@ layoutHead(e($token['symbol']));
 layoutNav($user);
 ?>
 
-    <main class="container">
+    <main class="container" data-page="token" data-token-id="<?= (int)$tokenId ?>">
         <a href="index.php" class="back-link">&larr; Back to Dashboard</a>
 
         <section class="token-header">

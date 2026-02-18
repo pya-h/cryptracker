@@ -17,6 +17,75 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    /* ── User Context Menu ────────────────────────────────── */
+
+    const menuBtn  = document.getElementById('userMenuBtn');
+    const menuWrap = menuBtn ? menuBtn.closest('.user-menu-wrapper') : null;
+
+    if (menuBtn && menuWrap) {
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menuWrap.classList.toggle('open');
+        });
+        document.addEventListener('click', (e) => {
+            if (!menuWrap.contains(e.target)) menuWrap.classList.remove('open');
+        });
+    }
+
+    /* ── Customize Modal ──────────────────────────────────── */
+
+    const overlay  = document.getElementById('customizeOverlay');
+    const openBtn  = document.getElementById('openCustomize');
+    const closeBtn = document.getElementById('closeCustomize');
+
+    if (overlay && openBtn) {
+        openBtn.addEventListener('click', () => {
+            overlay.classList.add('open');
+            if (menuWrap) menuWrap.classList.remove('open');
+        });
+        closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.classList.remove('open');
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && overlay.classList.contains('open')) {
+                overlay.classList.remove('open');
+            }
+        });
+    }
+
+    /* ── Precision Slider ─────────────────────────────────── */
+
+    const precSlider = document.getElementById('precSlider');
+    const precVal    = document.getElementById('precVal');
+
+    if (precSlider && precVal) {
+        precSlider.addEventListener('input', () => {
+            precVal.textContent = precSlider.value;
+        });
+    }
+
+    /* ── Export to CSV ─────────────────────────────────────── */
+
+    const exportBtn = document.getElementById('exportCsv');
+
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            if (menuWrap) menuWrap.classList.remove('open');
+            const main = document.querySelector('main[data-page]');
+            if (!main) return;
+
+            const page = main.dataset.page;
+            let url = 'export_csv.php?page=' + encodeURIComponent(page);
+            if (page === 'token') {
+                url += '&id=' + encodeURIComponent(main.dataset.tokenId || '');
+            }
+            window.location.href = url;
+        });
+    }
+
+
+    /* ── Token Search ─────────────────────────────────────── */
 
     const searchInput   = document.getElementById('tokenSearch');
     const searchResults = document.getElementById('searchResults');
