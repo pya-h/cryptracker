@@ -50,9 +50,9 @@ function formatPL(float $v, int $decimals = -1): string
 {
     if ($decimals < 0) $decimals = precision();
     if ($v >= 0) {
-        return '+$' . number_format($v, $decimals);
+        return trimZeros('+$' . number_format($v, $decimals));
     }
-    return '-$' . number_format(abs($v), $decimals);
+    return trimZeros('-$' . number_format(abs($v), $decimals));
 }
 
 function formatCrypto(float $amount, int $decimals = -1): string
@@ -65,24 +65,24 @@ function formatCrypto(float $amount, int $decimals = -1): string
 function formatUSD(float $v, int $decimals = -1): string
 {
     if ($decimals < 0) $decimals = precision();
-    return '$' . number_format($v, $decimals);
+    return trimZeros('$' . number_format($v, $decimals));
 }
 
 function formatPercent(float $v, int $decimals = -1): string
 {
     if ($decimals < 0) $decimals = precision();
     $sign = $v >= 0 ? '+' : '';
-    return $sign . number_format($v, $decimals) . '%';
+    return trimZeros($sign . number_format($v, $decimals)) . '%';
 }
 
 function formatBigNum(float $v): string
 {
     $p = precision();
-    if ($v >= 1e12) return '$' . number_format($v / 1e12, $p) . 'T';
-    if ($v >= 1e9)  return '$' . number_format($v / 1e9, $p) . 'B';
-    if ($v >= 1e6)  return '$' . number_format($v / 1e6, $p) . 'M';
-    if ($v >= 1e3)  return '$' . number_format($v / 1e3, $p) . 'K';
-    return '$' . number_format($v, $p);
+    if ($v >= 1e12) return trimZeros('$' . number_format($v / 1e12, $p)) . 'T';
+    if ($v >= 1e9)  return trimZeros('$' . number_format($v / 1e9, $p)) . 'B';
+    if ($v >= 1e6)  return trimZeros('$' . number_format($v / 1e6, $p)) . 'M';
+    if ($v >= 1e3)  return trimZeros('$' . number_format($v / 1e3, $p)) . 'K';
+    return trimZeros('$' . number_format($v, $p));
 }
 
 function formatSupply(float $v): string
@@ -108,6 +108,19 @@ function plMode(): string
 function precision(): int
 {
     return (int) ($_SESSION['precision'] ?? 2);
+}
+
+function worthlessZeros(): bool
+{
+    return (bool) ($_SESSION['worthless_zeros'] ?? true);
+}
+
+function trimZeros(string $s): string
+{
+    if (worthlessZeros()) return $s;
+    return preg_replace_callback('/\d+\.\d+/', function ($m) {
+        return rtrim(rtrim($m[0], '0'), '.');
+    }, $s);
 }
 
 function theme(): string
@@ -376,6 +389,7 @@ function layoutCustomizeModal(array $user, string $redirect): void
     $modeLabel = $isExact ? 'Exact' : 'Average';
     $thm = theme();
     $prec = precision();
+    $wz   = worthlessZeros();
 
     echo '<div class="modal-overlay" id="customizeOverlay">
     <div class="modal animate-scale-in">
@@ -422,6 +436,10 @@ function layoutCustomizeModal(array $user, string $redirect): void
                     <input type="hidden" name="redirect" value="' . e($redirect) . '">
                     <input type="range" name="precision" min="2" max="10" value="' . $prec . '" class="precision-slider" id="precSlider">
                     <div class="precision-range-labels"><span>2</span><span>10</span></div>
+                    <label class="wz-checkbox">
+                        <input type="checkbox" name="worthless_zeros" value="1"' . ($wz ? ' checked' : '') . '>
+                        <span>Worthless Zeros</span>
+                    </label>
                     <button type="submit" class="btn btn-primary btn-sm" style="margin-top:.5rem">Apply</button>
                 </form>
             </div>

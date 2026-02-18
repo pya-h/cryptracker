@@ -383,6 +383,17 @@ a:hover { color: var(--primary-h); }
 
 .precision-form .btn { align-self: flex-start; }
 
+.wz-checkbox {
+    display: flex; align-items: center; gap: .45rem;
+    margin-top: .4rem; cursor: pointer; font-size: .85rem;
+    color: var(--text-muted);
+}
+.wz-checkbox input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 15px; height: 15px; cursor: pointer;
+}
+.wz-checkbox span { user-select: none; }
+
 /* ── Buttons ──────────────────────────────────────────────── */
 
 .btn {
