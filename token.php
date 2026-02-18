@@ -47,8 +47,10 @@ $plPercent    = ($costBasis > 0) ? (($unrealizedPL / $costBasis) * 100) : 0;
 $totalPercent = ($totalSpent > 0) ? (($totalPL / $totalSpent) * 100) : 0;
 
 $graphData = json_encode(array_map(fn($p) => [
-    'date' => $p['date'],
-    'pl'   => round($p['cum_total_pl'], 2),
+    'date'         => $p['date'],
+    'total_pl'     => round($p['total_pl'], 2),
+    'unrealized'   => round($p['unrealized'], 2),
+    'cum_realized' => round($p['cum_realized'], 2),
 ], $plTimeline));
 
 layoutHead(e($token['symbol']));
@@ -206,25 +208,31 @@ layoutNav($user);
                     <thead>
                         <tr>
                             <th>Date</th>
-                            <th>Type</th>
                             <th>Amount</th>
                             <th>Price/Unit</th>
                             <th>Total</th>
-                            <th>Realized P/L</th>
                             <th>Holdings</th>
                             <th>Avg Cost</th>
+                            <th>Realized P/L</th>
                             <th>Cum. Realized</th>
-                            <th>Cum. Total P/L</th>
+                            <th>Unrealized P/L</th>
+                            <th>Total P/L</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($plTimeline as $row): ?>
                         <tr>
                             <td><?= date('M d, Y H:i', strtotime($row['date'])) ?></td>
-                            <td><span class="badge badge-<?= $row['type'] ?>"><?= ucfirst($row['type']) ?></span></td>
-                            <td><?= formatCrypto($row['amount']) ?></td>
+                            <td>
+                                <?php $isBuy = $row['type'] === 'buy'; ?>
+                                <span class="badge badge-<?= $row['type'] ?>">
+                                    <?= $isBuy ? '+' : '-' ?><?= formatCrypto($row['amount']) ?>
+                                </span>
+                            </td>
                             <td>$<?= number_format($row['ppu'], 6) ?></td>
                             <td><?= formatUSD($row['total']) ?></td>
+                            <td><?= formatCrypto($row['holdings']) ?></td>
+                            <td>$<?= number_format($row['avg_cost'], 6) ?></td>
                             <td class="<?= plClass($row['realized']) ?>">
                                 <?php if ($row['type'] === 'sell'): ?>
                                     <?= formatPL($row['realized']) ?>
@@ -232,12 +240,9 @@ layoutNav($user);
                                     –
                                 <?php endif; ?>
                             </td>
-                            <td><?= formatCrypto($row['holdings']) ?></td>
-                            <td>$<?= number_format($row['avg_cost'], 6) ?></td>
                             <td class="<?= plClass($row['cum_realized']) ?>"><?= formatPL($row['cum_realized']) ?></td>
-                            <td class="<?= plClass($row['cum_total_pl']) ?>">
-                                <?= formatPL($row['cum_total_pl']) ?>
-                            </td>
+                            <td class="<?= plClass($row['unrealized']) ?>"><?= formatPL($row['unrealized']) ?></td>
+                            <td class="<?= plClass($row['total_pl']) ?>"><?= formatPL($row['total_pl']) ?></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -317,25 +322,31 @@ layoutNav($user);
         const ctx = canvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
 
+        const COLORS = {
+            totalPL:     { line: '#6c5ce7', fill: 'rgba(108,92,231,0.12)', dot: '#6c5ce7' },
+            unrealized:  { line: '#fdcb6e', fill: 'rgba(253,203,110,0.08)', dot: '#fdcb6e' },
+            cumRealized: { line: '#00cec9', fill: 'rgba(0,206,201,0.08)', dot: '#00cec9' },
+        };
+
         function draw() {
             const rect = canvas.parentElement.getBoundingClientRect();
             canvas.width  = rect.width * dpr;
-            canvas.height = 280 * dpr;
+            canvas.height = 320 * dpr;
             canvas.style.width  = rect.width + 'px';
-            canvas.style.height = '280px';
+            canvas.style.height = '320px';
             ctx.scale(dpr, dpr);
 
             const W = rect.width;
-            const H = 280;
-            const pad = { top: 30, right: 20, bottom: 40, left: 65 };
+            const H = 320;
+            const pad = { top: 30, right: 20, bottom: 50, left: 65 };
             const gW = W - pad.left - pad.right;
             const gH = H - pad.top - pad.bottom;
 
             ctx.clearRect(0, 0, W, H);
 
-            const vals = data.map(d => d.pl);
-            let minV = Math.min(0, ...vals);
-            let maxV = Math.max(0, ...vals);
+            const allVals = data.flatMap(d => [d.total_pl, d.unrealized, d.cum_realized]);
+            let minV = Math.min(0, ...allVals);
+            let maxV = Math.max(0, ...allVals);
             if (minV === maxV) { minV -= 10; maxV += 10; }
             const range = maxV - minV;
             minV -= range * 0.1;
@@ -350,11 +361,7 @@ layoutNav($user);
             const gridN = 5;
             for (let i = 0; i <= gridN; i++) {
                 const y = pad.top + (gH / gridN) * i;
-                ctx.beginPath();
-                ctx.moveTo(pad.left, y);
-                ctx.lineTo(W - pad.right, y);
-                ctx.stroke();
-
+                ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
                 const val = maxV - ((maxV - minV) / gridN) * i;
                 ctx.fillStyle = '#7c819a';
                 ctx.font = '11px Inter, sans-serif';
@@ -367,53 +374,56 @@ layoutNav($user);
             if (zeroY >= pad.top && zeroY <= pad.top + gH) {
                 ctx.strokeStyle = 'rgba(255,255,255,0.15)';
                 ctx.setLineDash([4, 4]);
-                ctx.beginPath();
-                ctx.moveTo(pad.left, zeroY);
-                ctx.lineTo(W - pad.right, zeroY);
-                ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(pad.left, zeroY); ctx.lineTo(W - pad.right, zeroY); ctx.stroke();
                 ctx.setLineDash([]);
             }
 
-            // Gradient fill
-            const lastPL = data[data.length - 1].pl;
+            // Gradient fill under Total P/L line
+            const lastTotal = data[data.length - 1].total_pl;
             const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + gH);
-            if (lastPL >= 0) {
-                grad.addColorStop(0, 'rgba(0,212,161,0.25)');
-                grad.addColorStop(1, 'rgba(0,212,161,0.02)');
+            if (lastTotal >= 0) {
+                grad.addColorStop(0, 'rgba(108,92,231,0.18)');
+                grad.addColorStop(1, 'rgba(108,92,231,0.01)');
             } else {
-                grad.addColorStop(0, 'rgba(255,92,108,0.02)');
-                grad.addColorStop(1, 'rgba(255,92,108,0.25)');
+                grad.addColorStop(0, 'rgba(108,92,231,0.01)');
+                grad.addColorStop(1, 'rgba(108,92,231,0.18)');
             }
-
             ctx.beginPath();
             ctx.moveTo(xPos(0), yPos(0));
-            for (let i = 0; i < data.length; i++) ctx.lineTo(xPos(i), yPos(data[i].pl));
+            for (let i = 0; i < data.length; i++) ctx.lineTo(xPos(i), yPos(data[i].total_pl));
             ctx.lineTo(xPos(data.length - 1), yPos(0));
             ctx.closePath();
             ctx.fillStyle = grad;
             ctx.fill();
 
-            // Line
-            ctx.beginPath();
-            for (let i = 0; i < data.length; i++) {
-                const x = xPos(i), y = yPos(data[i].pl);
-                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-            }
-            ctx.strokeStyle = lastPL >= 0 ? '#00d4a1' : '#ff5c6c';
-            ctx.lineWidth = 2.5;
-            ctx.lineJoin = 'round';
-            ctx.stroke();
-
-            // Dots
-            data.forEach((d, i) => {
+            // Draw helper: line + dots
+            function drawLine(key, color, lineW, dashPattern) {
                 ctx.beginPath();
-                ctx.arc(xPos(i), yPos(d.pl), 4, 0, Math.PI * 2);
-                ctx.fillStyle = d.pl >= 0 ? '#00d4a1' : '#ff5c6c';
-                ctx.fill();
-                ctx.strokeStyle = '#0b0d14';
-                ctx.lineWidth = 2;
+                ctx.setLineDash(dashPattern || []);
+                for (let i = 0; i < data.length; i++) {
+                    const x = xPos(i), y = yPos(data[i][key]);
+                    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = color.line;
+                ctx.lineWidth = lineW;
+                ctx.lineJoin = 'round';
                 ctx.stroke();
-            });
+                ctx.setLineDash([]);
+
+                data.forEach((d, i) => {
+                    ctx.beginPath();
+                    ctx.arc(xPos(i), yPos(d[key]), 3, 0, Math.PI * 2);
+                    ctx.fillStyle = color.dot;
+                    ctx.fill();
+                    ctx.strokeStyle = '#0b0d14';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                });
+            }
+
+            drawLine('cum_realized', COLORS.cumRealized, 2, [6, 3]);
+            drawLine('unrealized',   COLORS.unrealized,  2, [3, 3]);
+            drawLine('total_pl',     COLORS.totalPL,     2.5);
 
             // X labels
             ctx.fillStyle = '#7c819a';
@@ -430,7 +440,26 @@ layoutNav($user);
             ctx.fillStyle = '#e4e7ef';
             ctx.font = '600 12px Inter, sans-serif';
             ctx.textAlign = 'left';
-            ctx.fillText('Cumulative P/L Over Time', pad.left, 18);
+            ctx.fillText('P/L Over Time', pad.left, 18);
+
+            // Legend
+            const legendY = H - 10;
+            const legends = [
+                { label: 'Total P/L',       color: COLORS.totalPL.line },
+                { label: 'Unrealized P/L',  color: COLORS.unrealized.line },
+                { label: 'Cum. Realized',   color: COLORS.cumRealized.line },
+            ];
+            ctx.font = '11px Inter, sans-serif';
+            let lx = pad.left;
+            legends.forEach(lg => {
+                ctx.fillStyle = lg.color;
+                ctx.fillRect(lx, legendY - 8, 14, 3);
+                lx += 18;
+                ctx.fillStyle = '#9ca3b8';
+                ctx.textAlign = 'left';
+                ctx.fillText(lg.label, lx, legendY);
+                lx += ctx.measureText(lg.label).width + 20;
+            });
         }
 
         draw();

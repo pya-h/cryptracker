@@ -174,7 +174,8 @@ function _calcAvg(array $txs, float $currentPrice): array
             'holdings'     => $runHoldings,
             'avg_cost'     => $runAvg,
             'cum_realized' => $runRealized,
-            'cum_total_pl' => $runTotalPL,
+            'unrealized'   => $runUnrealized,
+            'total_pl'     => $runTotalPL,
         ];
     }
 
@@ -250,7 +251,8 @@ function _calcFifo(array $txs, float $currentPrice): array
             'holdings'     => $holdings,
             'avg_cost'     => $avgCost,
             'cum_realized' => $runRealized,
-            'cum_total_pl' => $runTotalPL,
+            'unrealized'   => $runUnrealized,
+            'total_pl'     => $runTotalPL,
         ];
     }
 
