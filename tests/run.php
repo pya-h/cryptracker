@@ -8,11 +8,6 @@
  * discovers and executes them, printing results.
  */
 
-// Prevent session issues in CLI
-if (session_status() === PHP_SESSION_NONE && php_sapi_name() === 'cli') {
-    // Don't start session in CLI — our config.php already handles this
-}
-
 /* ── Minimal test framework ─────────────────────────────────── */
 
 $_TEST_RESULTS = ['passed' => 0, 'failed' => 0, 'errors' => []];
@@ -76,7 +71,6 @@ function assert_contains(string $haystack, string $needle, string $message = '')
 
 define('APP_BASE_PATH', __DIR__ . '/tmp_test_data');
 
-// Clean up from previous runs
 if (is_dir(APP_BASE_PATH)) {
     array_map('unlink', glob(APP_BASE_PATH . '/database/*.json'));
     array_map('unlink', glob(APP_BASE_PATH . '/database/*.tmp.*'));
@@ -87,14 +81,12 @@ if (is_dir(APP_BASE_PATH)) {
 
 mkdir(APP_BASE_PATH, 0755, true);
 
-// Create a test .env
 file_put_contents(APP_BASE_PATH . '/.env', implode("\n", [
     'APP_NAME=CrypTracker_Test',
     'CMC_API_KEY=test_key_not_real',
     'SESSION_LIFETIME=3600',
 ]));
 
-// Start a CLI session for auth tests
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -121,7 +113,6 @@ foreach ($testFiles as $file) {
     require_once $file;
 }
 
-// Discover test functions
 $allFunctions = get_defined_functions()['user'];
 $testFunctions = array_filter($allFunctions, fn($f) => str_starts_with($f, 'test_'));
 

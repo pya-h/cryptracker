@@ -96,10 +96,8 @@ function test_pl_partial_sell(): void
     assert_equals(100.0, $pl['holdings'], 'Holdings should be 100 before sell');
     assert_equals(150.0, $pl['realizedPL'], 'Realized P/L should be 150');
 
-    // Record the sell
     dbInsertTransaction($tid, 'sell', 30.0, 25.0, 750.0, 150.0);
 
-    // Verify remaining holdings
     $stats = dbGetTokenStats($tid);
     $remaining = $stats['bought'] - $stats['sold'];
     assert_equals(70.0, $remaining, 'Remaining holdings should be 70');

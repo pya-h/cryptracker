@@ -36,19 +36,15 @@ function test_security_csrf_verify(): void
 
     $token = csrfToken();
 
-    // Valid token
     $_POST['_csrf'] = $token;
     assert_true(csrfVerify(), 'Valid CSRF token should verify');
 
-    // Invalid token
     $_POST['_csrf'] = 'invalid_token';
     assert_false(csrfVerify(), 'Invalid CSRF token should not verify');
 
-    // Missing token
     unset($_POST['_csrf']);
     assert_false(csrfVerify(), 'Missing CSRF token should not verify');
 
-    // Empty session token
     $_SESSION = [];
     $_POST['_csrf'] = $token;
     assert_false(csrfVerify(), 'CSRF verify should fail with empty session');
@@ -80,7 +76,6 @@ function test_helper_pl_class(): void
 
 function test_helper_format_pl(): void
 {
-    // Positive values
     assert_equals('+$1,000.00', formatPL(1000.0), 'Positive P/L format');
     assert_equals('+$0.00', formatPL(0.0), 'Zero P/L format');
 
@@ -124,7 +119,6 @@ function test_helper_flash_messages(): void
     assert_equals('Token added!', $flashes[0]['message'], 'First flash message');
     assert_equals('error', $flashes[1]['type'], 'Second flash type');
 
-    // Flashes should be consumed
     $again = getFlashes();
     assert_equals(0, count($again), 'Flashes should be consumed after reading');
 

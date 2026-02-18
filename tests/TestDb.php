@@ -7,17 +7,14 @@ function test_db_user_crud(): void
 {
     dbPurgeAll();
 
-    // Insert user
     $id = dbInsertUser('testuser', 'test@example.com', password_hash('secret', PASSWORD_BCRYPT));
     assert_greater_than($id, 0, 'User ID should be positive');
 
-    // Retrieve by ID
     $user = dbGetUserById($id);
     assert_not_null($user, 'User should be found by ID');
     assert_equals('testuser', $user['username'], 'Username should match');
     assert_equals('test@example.com', $user['email'], 'Email should match');
 
-    // Retrieve by field
     $byName = dbGetUserByField('username', 'testuser');
     assert_not_null($byName, 'User should be found by username');
     assert_equals($id, $byName['id'], 'IDs should match');
@@ -25,11 +22,9 @@ function test_db_user_crud(): void
     $byEmail = dbGetUserByField('email', 'test@example.com');
     assert_not_null($byEmail, 'User should be found by email');
 
-    // Case-insensitive lookup
     $byUpper = dbGetUserByField('username', 'TESTUSER');
     assert_not_null($byUpper, 'Username lookup should be case-insensitive');
 
-    // Non-existent user
     $none = dbGetUserByField('username', 'nonexistent');
     assert_null($none, 'Non-existent user should return null');
 
@@ -56,21 +51,17 @@ function test_db_user_token_crud(): void
     $tokenId = dbInsertUserToken($uid, 1, 'BTC', 'Bitcoin', 'bitcoin');
     assert_greater_than($tokenId, 0, 'Token ID should be positive');
 
-    // Get tokens for user
     $tokens = dbGetUserTokens($uid);
     assert_equals(1, count($tokens), 'Should have 1 token');
     assert_equals('BTC', $tokens[0]['symbol'], 'Symbol should be BTC');
 
-    // Get single token
     $t = dbGetUserToken($tokenId, $uid);
     assert_not_null($t, 'Token should be found');
     assert_equals('Bitcoin', $t['name'], 'Name should match');
 
-    // Wrong user shouldn't access token
     $wrong = dbGetUserToken($tokenId, 999);
     assert_null($wrong, 'Wrong user should not access token');
 
-    // Get by CMC ID
     $byCmc = dbGetUserTokenByCmc($uid, 1);
     assert_not_null($byCmc, 'Should find token by CMC ID');
 
@@ -84,17 +75,14 @@ function test_db_transaction_crud(): void
     $uid     = dbInsertUser('charlie', 'charlie@example.com', password_hash('p', PASSWORD_BCRYPT));
     $tokenId = dbInsertUserToken($uid, 1, 'BTC', 'Bitcoin', 'bitcoin');
 
-    // Insert buy
     $txId = dbInsertTransaction($tokenId, 'buy', 1.5, 40000.0, 60000.0, 0.0);
     assert_greater_than($txId, 0, 'Transaction ID should be positive');
 
-    // Retrieve buy transactions
     $buys = dbGetTransactions($tokenId, 'buy');
     assert_equals(1, count($buys), 'Should have 1 buy');
     assert_equals(1.5, $buys[0]['amount'], 'Buy amount should match');
     assert_equals(60000.0, $buys[0]['total_value'], 'Total value should match');
 
-    // Insert sell
     $txId2 = dbInsertTransaction($tokenId, 'sell', 0.5, 50000.0, 25000.0, 5000.0);
     assert_greater_than($txId2, $txId, 'Second tx ID should be larger');
 
@@ -102,7 +90,6 @@ function test_db_transaction_crud(): void
     assert_equals(1, count($sells), 'Should have 1 sell');
     assert_equals(5000.0, $sells[0]['realized_pl'], 'Realized P/L should be 5000');
 
-    // All transactions (desc order)
     $all = dbGetTransactionsDesc($tokenId);
     assert_equals(2, count($all), 'Should have 2 total transactions');
     assert_equals('sell', $all[0]['type'], 'Most recent should be sell');
@@ -181,7 +168,6 @@ function test_db_multiple_users_isolation(): void
     $token1 = dbInsertUserToken($uid1, 1, 'BTC', 'Bitcoin', 'bitcoin');
     $token2 = dbInsertUserToken($uid2, 2, 'ETH', 'Ethereum', 'ethereum');
 
-    // User 1 should not see user 2's tokens
     $u1tokens = dbGetUserTokens($uid1);
     assert_equals(1, count($u1tokens), 'User 1 should have 1 token');
     assert_equals('BTC', $u1tokens[0]['symbol'], 'User 1 token should be BTC');
@@ -190,7 +176,6 @@ function test_db_multiple_users_isolation(): void
     assert_equals(1, count($u2tokens), 'User 2 should have 1 token');
     assert_equals('ETH', $u2tokens[0]['symbol'], 'User 2 token should be ETH');
 
-    // Cross-user access forbidden
     $cross = dbGetUserToken($token1, $uid2);
     assert_null($cross, 'User 2 should not access User 1 token');
 

@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.clickable-row').forEach(row => {
         row.addEventListener('click', (e) => {
-            // Don't navigate if clicking a button/link inside the row
             if (e.target.closest('a, button, form')) return;
             const href = row.dataset.href;
             if (href) window.location.href = href;
@@ -24,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!searchInput || !searchResults) return;
 
-    // Grab CSRF token from meta tag
     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
@@ -46,14 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
         debounceTimer = setTimeout(() => fetchTokens(q), 350);
     });
 
-    // Close dropdown when clicking outside
     document.addEventListener('click', e => {
         if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
             searchResults.classList.remove('open');
         }
     });
 
-    // Close on Escape key
     searchInput.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
             searchResults.classList.remove('open');
@@ -114,7 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.textContent = '+ Add';
                 form.appendChild(btn);
 
-                // Explicit click handler on the button as backup
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -124,7 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.appendChild(info);
                 item.appendChild(form);
 
-                // Clicking anywhere on the row also submits the form
                 item.addEventListener('click', (e) => {
                     if (e.target.closest('button')) return;
                     form.submit();

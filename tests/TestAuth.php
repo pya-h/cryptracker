@@ -12,16 +12,13 @@ function test_auth_register_success(): void
     assert_true($result['ok'], 'Registration should succeed');
     assert_greater_than($result['user_id'], 0, 'User ID should be positive');
 
-    // User should be in session
     assert_equals($result['user_id'], $_SESSION['user_id'], 'Session should contain user ID');
 
-    // User should exist in DB
     $user = dbGetUserById($result['user_id']);
     assert_not_null($user, 'User should exist in DB');
     assert_equals('validuser', $user['username'], 'Username should match');
     assert_equals('valid@example.com', $user['email'], 'Email should be lowercased');
 
-    // Password should be hashed
     assert_true(password_verify('secret123', $user['password_hash']), 'Password should verify');
     assert_false(password_verify('wrong', $user['password_hash']), 'Wrong password should not verify');
 
@@ -34,19 +31,15 @@ function test_auth_register_validation(): void
     dbPurgeAll();
     $_SESSION = [];
 
-    // Too short username
     $r = registerUser('ab', 'valid@example.com', 'secret123');
     assert_false($r['ok'], 'Short username should fail');
 
-    // Invalid username chars
     $r = registerUser('user name!', 'valid@example.com', 'secret123');
     assert_false($r['ok'], 'Username with spaces/special chars should fail');
 
-    // Invalid email
     $r = registerUser('validuser', 'not-an-email', 'secret123');
     assert_false($r['ok'], 'Invalid email should fail');
 
-    // Short password
     $r = registerUser('validuser', 'valid@example.com', '123');
     assert_false($r['ok'], 'Short password should fail');
 
@@ -62,7 +55,6 @@ function test_auth_register_duplicate(): void
     registerUser('alice', 'alice@example.com', 'password1');
     $_SESSION = [];
 
-    // Duplicate username
     $r = registerUser('alice', 'different@example.com', 'password2');
     assert_false($r['ok'], 'Duplicate username should fail');
     assert_true(
@@ -70,7 +62,6 @@ function test_auth_register_duplicate(): void
         'Should report username taken'
     );
 
-    // Duplicate email
     $r = registerUser('bob', 'alice@example.com', 'password2');
     assert_false($r['ok'], 'Duplicate email should fail');
     assert_true(
@@ -90,14 +81,12 @@ function test_auth_login_success(): void
     registerUser('logintest', 'login@test.com', 'myPassword');
     $_SESSION = [];
 
-    // Login by username
     $r = loginUser('logintest', 'myPassword');
     assert_true($r['ok'], 'Login by username should succeed');
     assert_true(isset($_SESSION['user_id']), 'Session should be set after login');
 
     $_SESSION = [];
 
-    // Login by email
     $r = loginUser('login@test.com', 'myPassword');
     assert_true($r['ok'], 'Login by email should succeed');
 
@@ -113,7 +102,6 @@ function test_auth_login_failure(): void
     registerUser('logintest2', 'login2@test.com', 'correctPass');
     $_SESSION = [];
 
-    // Wrong password
     $r = loginUser('logintest2', 'wrongPassword');
     assert_false($r['ok'], 'Wrong password should fail');
     assert_true(
@@ -121,7 +109,6 @@ function test_auth_login_failure(): void
         'Should report invalid credentials'
     );
 
-    // Non-existent user
     $r = loginUser('nonexistent', 'anyPassword');
     assert_false($r['ok'], 'Non-existent user should fail');
 
@@ -137,7 +124,6 @@ function test_auth_rate_limiting(): void
     registerUser('ratelimit', 'rate@test.com', 'password');
     $_SESSION = [];
 
-    // Simulate 5 failed login attempts
     for ($i = 0; $i < 5; $i++) {
         loginUser('ratelimit', 'wrongpassword');
     }
@@ -159,11 +145,9 @@ function test_auth_current_user(): void
     dbPurgeAll();
     $_SESSION = [];
 
-    // No session = no user
     $user = currentUser();
     assert_null($user, 'No session should mean no user');
 
-    // After login, currentUser should work
     registerUser('currenttest', 'cur@test.com', 'pass123');
     $user = currentUser();
     assert_not_null($user, 'After register, current user should exist');

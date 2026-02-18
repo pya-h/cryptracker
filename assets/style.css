@@ -347,7 +347,7 @@ form .btn { margin-top: 1.2rem; }
 
 /* ── Add Token Section ────────────────────────────────────── */
 
-.add-token-section { margin-bottom: 2rem; animation: fadeInUp .5s ease .1s both; }
+.add-token-section { margin-bottom: 2rem; animation: fadeInUp .5s ease .1s both; position: relative; z-index: 100; }
 .add-token-section h2 { margin-bottom: .75rem; font-size: 1.1rem; font-weight: 600; }
 
 .search-wrapper { position: relative; max-width: 480px; }
@@ -370,37 +370,38 @@ form .btn { margin-top: 1.2rem; }
 
 .search-results {
     position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-    background: #1e2235;
-    border: 1px solid rgba(124,106,239,.25);
+    background: #252940;
+    border: 1px solid rgba(124,106,239,.35);
     border-radius: var(--radius-sm);
     max-height: 340px; overflow-y: auto;
-    display: none; z-index: 50;
-    box-shadow: 0 8px 32px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.05);
+    display: none; z-index: 9999;
+    box-shadow: 0 12px 40px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.08);
     animation: slideDown .2s ease both;
+    backdrop-filter: none;
 }
 
 .search-results.open { display: block; }
 
 .search-result-item {
     display: flex; justify-content: space-between; align-items: center;
-    padding: .75rem 1rem; cursor: pointer;
-    border-bottom: 1px solid rgba(255,255,255,.06);
-    transition: all var(--transition);
-    background: transparent;
+    padding: .8rem 1rem; cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    transition: background var(--transition);
+    background: #252940;
 }
 
 .search-result-item:last-child { border-bottom: none; }
-.search-result-item:hover { background: rgba(124,106,239,.12); }
+.search-result-item:hover { background: #2f3455; }
 
-.search-result-item .coin-name { font-weight: 600; font-size: .9rem; color: #e4e7ef; }
-.search-result-item .coin-symbol { color: #9da2be; font-size: .8rem; margin-left: .4rem; }
+.search-result-item .coin-name { font-weight: 600; font-size: .92rem; color: #f0f1f5; }
+.search-result-item .coin-symbol { color: #a8adc6; font-size: .82rem; margin-left: .5rem; }
 
 .search-result-item form { margin: 0; }
 .search-result-item .btn { padding: .3rem .8rem; font-size: .75rem; }
 
 /* ── Token Table ──────────────────────────────────────────── */
 
-.token-table-section { animation: fadeInUp .5s ease .15s both; }
+.token-table-section { animation: fadeInUp .5s ease .15s both; position: relative; z-index: 1; }
 .token-table-section h2 { font-size: 1.1rem; margin-bottom: .75rem; font-weight: 600; }
 
 .table-responsive { overflow-x: auto; border-radius: var(--radius); }

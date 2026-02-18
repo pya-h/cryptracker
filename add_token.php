@@ -24,7 +24,6 @@ if ($cmcId <= 0 || $symbol === '' || $name === '') {
     exit;
 }
 
-// Check if already tracked
 $existing = dbGetUserTokenByCmc($user['id'], $cmcId);
 
 if ($existing) {
