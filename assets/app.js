@@ -71,11 +71,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            searchResults.innerHTML = data.map(coin => {
+            searchResults.innerHTML = '';
+
+            data.forEach(coin => {
                 const item = document.createElement('div');
                 item.className = 'search-result-item';
 
-                // Info side
                 const info = document.createElement('div');
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'coin-name';
@@ -86,10 +87,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 info.appendChild(nameSpan);
                 info.appendChild(symSpan);
 
-                // Form side — build safely with DOM API to prevent XSS
                 const form = document.createElement('form');
                 form.method = 'POST';
                 form.action = 'add_token.php';
+                form.style.margin = '0';
 
                 const fields = [
                     ['_csrf', csrfToken],
@@ -99,11 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     ['slug', coin.slug || '']
                 ];
 
-                fields.forEach(([name, value]) => {
+                fields.forEach(([n, v]) => {
                     const input = document.createElement('input');
                     input.type = 'hidden';
-                    input.name = name;
-                    input.value = value;
+                    input.name = n;
+                    input.value = v;
                     form.appendChild(input);
                 });
 
@@ -113,10 +114,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.textContent = '+ Add';
                 form.appendChild(btn);
 
+                // Explicit click handler on the button as backup
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    form.submit();
+                });
+
                 item.appendChild(info);
                 item.appendChild(form);
-                return item.outerHTML;
-            }).join('');
+
+                // Clicking anywhere on the row also submits the form
+                item.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return;
+                    form.submit();
+                });
+
+                searchResults.appendChild(item);
+            });
         } catch (err) {
             searchResults.innerHTML = '<div class="search-no-results">Search failed. Try again.</div>';
         }

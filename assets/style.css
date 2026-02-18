@@ -169,6 +169,7 @@ a:hover { color: var(--primary-h); }
     background: rgba(255,255,255,.15);
     border-radius: inherit; opacity: 0;
     transition: opacity .3s;
+    pointer-events: none;
 }
 .btn:active::after { opacity: 1; }
 
@@ -369,12 +370,12 @@ form .btn { margin-top: 1.2rem; }
 
 .search-results {
     position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-    background: var(--bg-card-solid);
-    border: 1px solid var(--border);
+    background: #1e2235;
+    border: 1px solid rgba(124,106,239,.25);
     border-radius: var(--radius-sm);
     max-height: 340px; overflow-y: auto;
     display: none; z-index: 50;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 8px 32px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.05);
     animation: slideDown .2s ease both;
 }
 
@@ -382,16 +383,17 @@ form .btn { margin-top: 1.2rem; }
 
 .search-result-item {
     display: flex; justify-content: space-between; align-items: center;
-    padding: .7rem 1rem; cursor: pointer;
-    border-bottom: 1px solid var(--border);
+    padding: .75rem 1rem; cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,.06);
     transition: all var(--transition);
+    background: transparent;
 }
 
 .search-result-item:last-child { border-bottom: none; }
-.search-result-item:hover { background: rgba(124,106,239,.06); }
+.search-result-item:hover { background: rgba(124,106,239,.12); }
 
-.search-result-item .coin-name { font-weight: 600; font-size: .9rem; }
-.search-result-item .coin-symbol { color: var(--text-muted); font-size: .8rem; margin-left: .4rem; }
+.search-result-item .coin-name { font-weight: 600; font-size: .9rem; color: #e4e7ef; }
+.search-result-item .coin-symbol { color: #9da2be; font-size: .8rem; margin-left: .4rem; }
 
 .search-result-item form { margin: 0; }
 .search-result-item .btn { padding: .3rem .8rem; font-size: .75rem; }
