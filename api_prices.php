@@ -9,13 +9,24 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/api.php';
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('X-Content-Type-Options: nosniff');
 
 if (!currentUser()) { http_response_code(401); echo '{}'; exit; }
 
 $raw = trim($_GET['ids'] ?? '');
 if ($raw === '') { echo '{}'; exit; }
 
-$ids = array_filter(array_map('intval', explode(',', $raw)), fn($id) => $id > 0);
+$rawParts = explode(',', $raw);
+if (count($rawParts) > 200) { echo '{}'; exit; }
+
+$ids = array_filter(array_map('intval', $rawParts), fn($id) => $id > 0);
+$ids = array_values(array_unique($ids));
+if (count($ids) > 100) {
+    $ids = array_slice($ids, 0, 100);
+}
+
 if (empty($ids)) { echo '{}'; exit; }
 
 $quotes = coinloreGetQuotes($ids);

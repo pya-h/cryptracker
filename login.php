@@ -7,9 +7,13 @@ if (currentUser()) { header('Location: index.php'); exit; }
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $res = loginUser($_POST['login'] ?? '', $_POST['password'] ?? '');
-    if ($res['ok']) { header('Location: index.php'); exit; }
-    $errors = $res['errors'];
+    if (!csrfVerify()) {
+        $errors[] = 'Invalid or missing CSRF token. Please refresh and try again.';
+    } else {
+        $res = loginUser($_POST['login'] ?? '', $_POST['password'] ?? '');
+        if ($res['ok']) { header('Location: index.php'); exit; }
+        $errors = $res['errors'];
+    }
 }
 
 layoutHead('Login', true);
@@ -27,6 +31,7 @@ layoutHead('Login', true);
         <?php endif; ?>
 
         <form method="POST" autocomplete="on">
+            <?= csrfField() ?>
             <label for="login">Username or Email</label>
             <input type="text" id="login" name="login" required
                    value="<?= e($_POST['login'] ?? '') ?>">

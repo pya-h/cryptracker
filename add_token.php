@@ -18,7 +18,18 @@ $symbol = trim($_POST['symbol'] ?? '');
 $name   = trim($_POST['name']   ?? '');
 $slug   = trim($_POST['slug']   ?? '');
 
-if ($cmcId <= 0 || $symbol === '' || $name === '') {
+$symbol = strtoupper($symbol);
+
+if (
+    $cmcId <= 0
+    || $symbol === ''
+    || $name === ''
+    || strlen($symbol) > 20
+    || strlen($name) > 120
+    || strlen($slug) > 120
+    || !preg_match('/^[A-Z0-9.\-]+$/', $symbol)
+    || ($slug !== '' && !preg_match('/^[a-z0-9\-]+$/', $slug))
+) {
     flash('error', 'Invalid token data.');
     header('Location: index.php');
     exit;

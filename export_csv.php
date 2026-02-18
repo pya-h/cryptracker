@@ -11,6 +11,18 @@ require_once __DIR__ . '/includes/helpers.php';
 
 $user = requireAuth();
 
+function csvSafeCell($value): string
+{
+    $str = (string) $value;
+    if ($str === '') return $str;
+
+    $first = $str[0];
+    if (in_array($first, ['=', '+', '-', '@'], true)) {
+        return "'" . $str;
+    }
+    return $str;
+}
+
 $page = $_GET['page'] ?? '';
 
 if ($page === 'dashboard') {
@@ -32,8 +44,8 @@ if ($page === 'dashboard') {
         $pl       = calcTokenPL($tk['id'], $price, $mode);
 
         fputcsv($out, [
-            $tk['name'],
-            $tk['symbol'],
+            csvSafeCell($tk['name']),
+            csvSafeCell($tk['symbol']),
             round($price, 6),
             round($change24, 2),
             round($pl['holdings'], 8),
@@ -65,7 +77,7 @@ if ($page === 'token') {
     foreach ($allTx as $tx) {
         fputcsv($out, [
             $tx['created_at'],
-            ucfirst($tx['type']),
+            csvSafeCell(ucfirst($tx['type'])),
             round($tx['amount'], 8),
             round($tx['price_per_unit'], 6),
             round($tx['total_value'], 2),

@@ -28,7 +28,7 @@ function csrfField(): string
 
 function csrfVerify(): bool
 {
-    $token = $_POST['_csrf'] ?? $_GET['_csrf'] ?? '';
+    $token = $_POST['_csrf'] ?? '';
     if (empty($token) || empty($_SESSION['csrf_token'])) return false;
     return hash_equals($_SESSION['csrf_token'], $token);
 }
@@ -371,9 +371,12 @@ function layoutNav(array $user): void
                         <span class="menu-icon">⤓</span> Export to CSV
                     </button>
                     <div class="user-menu-divider"></div>
-                    <a href="logout.php" class="user-menu-item menu-danger">
-                        <span class="menu-icon">⏻</span> Logout
-                    </a>
+                    <form method="POST" action="logout.php" class="menu-logout-form">
+                        ' . csrfField() . '
+                        <button type="submit" class="user-menu-item menu-danger">
+                            <span class="menu-icon">⏻</span> Logout
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

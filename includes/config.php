@@ -38,9 +38,18 @@ if (!defined('CMC_API_KEY'))      define('CMC_API_KEY',      env('CMC_API_KEY', 
 if (!defined('SESSION_LIFETIME')) define('SESSION_LIFETIME', (int) env('SESSION_LIFETIME', 86400));
 
 if (php_sapi_name() !== 'cli' && session_status() === PHP_SESSION_NONE) {
+    $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+        || ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443);
+
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_samesite', 'Strict');
+
     session_set_cookie_params([
         'lifetime' => SESSION_LIFETIME,
         'path'     => '/',
+        'secure'   => $isHttps,
         'httponly'  => true,
         'samesite'  => 'Strict',
     ]);

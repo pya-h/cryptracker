@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const openBtn  = document.getElementById('openCustomize');
     const closeBtn = document.getElementById('closeCustomize');
 
-    if (overlay && openBtn) {
+    if (overlay && openBtn && closeBtn) {
         openBtn.addEventListener('click', () => {
             overlay.classList.add('open');
             if (menuWrap) menuWrap.classList.remove('open');
@@ -395,19 +395,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return text.includes('-$') ? -Math.abs(val) : val;
     }
 
+    let refreshInFlight = false;
+
     async function refreshPrices() {
         const ids = gatherCmcIds();
-        if (!ids.length) return;
+        if (!ids.length || refreshInFlight) return;
+        refreshInFlight = true;
         try {
-            const res = await fetch('api_prices.php?ids=' + ids.join(','));
+            const res = await fetch('api_prices.php?ids=' + ids.join(','), { cache: 'no-store' });
             if (!res.ok) return;
             const quotes = await res.json();
             if (page === 'dashboard') updateDashboard(quotes);
             if (page === 'token') updateTokenPage(quotes);
-        } catch (_) { /* silent fail — next tick retries */ }
+        } catch (_) {
+            /* silent fail — next tick retries */
+        } finally {
+            refreshInFlight = false;
+        }
     }
 
     if (gatherCmcIds().length > 0) {
+        refreshPrices();
         setInterval(refreshPrices, 10000);
     }
 

@@ -273,6 +273,8 @@ a:hover { color: var(--primary-h); }
 
 .user-menu-item:hover { background: rgba(124,106,239,.08); }
 
+.menu-logout-form { margin: 0; }
+
 .user-menu-item .menu-icon {
     font-size: 1rem; width: 1.2rem; text-align: center;
     opacity: .7;
@@ -389,10 +391,17 @@ a:hover { color: var(--primary-h); }
     color: var(--text-muted);
 }
 .wz-checkbox input[type="checkbox"] {
-    accent-color: var(--accent);
+    accent-color: var(--primary);
     width: 15px; height: 15px; cursor: pointer;
 }
 .wz-checkbox span { user-select: none; }
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
 
 /* ── Buttons ──────────────────────────────────────────────── */
 
@@ -1029,6 +1038,15 @@ form .btn { margin-top: 1.2rem; }
     .info-grid { grid-template-columns: 1fr; }
     .market-grid { grid-template-columns: 1fr; }
     .navbar { flex-wrap: wrap; gap: .5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 /* ── Light Theme ───────────────────────────────────────────── */

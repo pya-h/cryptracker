@@ -50,7 +50,7 @@ function registerUser(string $username, string $email, string $password): array
     $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
     $id   = dbInsertUser($username, $email, $hash);
 
-    if (session_status() === PHP_SESSION_ACTIVE) {
+    if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
         session_regenerate_id(true);
     }
     $_SESSION['user_id'] = $id;
@@ -80,7 +80,7 @@ function loginUser(string $login, string $password): array
         return ['ok' => false, 'errors' => ['Invalid credentials.']];
     }
 
-    if (session_status() === PHP_SESSION_ACTIVE) {
+    if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
         session_regenerate_id(true);
     }
     $_SESSION['user_id'] = $user['id'];

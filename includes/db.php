@@ -13,10 +13,20 @@ function ensureDataDir(): void
     if (!is_dir(DATA_DIR)) mkdir(DATA_DIR, 0755, true);
 }
 
+function tableFilePath(string $table): string
+{
+    return DATA_DIR . "/$table.json";
+}
+
+function tableLockPath(string $table): string
+{
+    return DATA_DIR . "/$table.lock";
+}
+
 function readTable(string $table): array
 {
     ensureDataDir();
-    $file = DATA_DIR . "/$table.json";
+    $file = tableFilePath($table);
     if (!file_exists($file)) return [];
     $raw = file_get_contents($file);
     if ($raw === false) return [];
@@ -27,10 +37,36 @@ function readTable(string $table): array
 function writeTable(string $table, array $rows): void
 {
     ensureDataDir();
-    $file = DATA_DIR . "/$table.json";
+    $file = tableFilePath($table);
     $tmp = $file . '.tmp.' . getmypid();
     file_put_contents($tmp, json_encode($rows, JSON_PRETTY_PRINT), LOCK_EX);
     rename($tmp, $file);
+}
+
+function withTableWrite(string $table, callable $mutator)
+{
+    ensureDataDir();
+
+    $lockFile = tableLockPath($table);
+    $lockHandle = fopen($lockFile, 'c+');
+    if ($lockHandle === false) {
+        throw new RuntimeException("Unable to open lock file for table '$table'.");
+    }
+
+    try {
+        if (!flock($lockHandle, LOCK_EX)) {
+            throw new RuntimeException("Unable to lock table '$table'.");
+        }
+
+        $rows = readTable($table);
+        $result = $mutator($rows);
+        writeTable($table, $rows);
+        flock($lockHandle, LOCK_UN);
+
+        return $result;
+    } finally {
+        fclose($lockHandle);
+    }
 }
 
 function nextId(array $rows): int
@@ -60,17 +96,17 @@ function dbGetUserByField(string $field, string $value): ?array
 
 function dbInsertUser(string $username, string $email, string $hash): int
 {
-    $users = readTable('users');
-    $id    = nextId($users);
-    $users[] = [
-        'id'            => $id,
-        'username'      => $username,
-        'email'         => $email,
-        'password_hash' => $hash,
-        'created_at'    => date('Y-m-d H:i:s'),
-    ];
-    writeTable('users', $users);
-    return $id;
+    return withTableWrite('users', function (array &$users) use ($username, $email, $hash): int {
+        $id = nextId($users);
+        $users[] = [
+            'id'            => $id,
+            'username'      => $username,
+            'email'         => $email,
+            'password_hash' => $hash,
+            'created_at'    => date('Y-m-d H:i:s'),
+        ];
+        return $id;
+    });
 }
 
 function dbGetUserTokens(int $userId): array
@@ -99,30 +135,30 @@ function dbGetUserTokenByCmc(int $userId, int $cmcId): ?array
 
 function dbInsertUserToken(int $userId, int $cmcId, string $symbol, string $name, string $slug): int
 {
-    $tokens = readTable('user_tokens');
-    $id     = nextId($tokens);
-    $tokens[] = [
-        'id'       => $id,
-        'user_id'  => $userId,
-        'cmc_id'   => $cmcId,
-        'symbol'   => $symbol,
-        'name'     => $name,
-        'slug'     => $slug,
-        'added_at' => date('Y-m-d H:i:s'),
-    ];
-    writeTable('user_tokens', $tokens);
-    return $id;
+    return withTableWrite('user_tokens', function (array &$tokens) use ($userId, $cmcId, $symbol, $name, $slug): int {
+        $id = nextId($tokens);
+        $tokens[] = [
+            'id'       => $id,
+            'user_id'  => $userId,
+            'cmc_id'   => $cmcId,
+            'symbol'   => $symbol,
+            'name'     => $name,
+            'slug'     => $slug,
+            'added_at' => date('Y-m-d H:i:s'),
+        ];
+        return $id;
+    });
 }
 
 function dbDeleteUserToken(int $tokenId): void
 {
-    $tokens = readTable('user_tokens');
-    $tokens = array_values(array_filter($tokens, fn($t) => $t['id'] !== $tokenId));
-    writeTable('user_tokens', $tokens);
+    withTableWrite('user_tokens', function (array &$tokens) use ($tokenId): void {
+        $tokens = array_values(array_filter($tokens, fn($t) => $t['id'] !== $tokenId));
+    });
 
-    $txs = readTable('transactions');
-    $txs = array_values(array_filter($txs, fn($t) => $t['user_token_id'] !== $tokenId));
-    writeTable('transactions', $txs);
+    withTableWrite('transactions', function (array &$txs) use ($tokenId): void {
+        $txs = array_values(array_filter($txs, fn($t) => $t['user_token_id'] !== $tokenId));
+    });
 }
 
 function dbGetTransactions(int $userTokenId, ?string $type = null): array
@@ -148,20 +184,20 @@ function dbInsertTransaction(int $userTokenId, string $type, float $amount, floa
         throw new InvalidArgumentException("Transaction type must be 'buy' or 'sell'");
     }
 
-    $txs = readTable('transactions');
-    $id  = nextId($txs);
-    $txs[] = [
-        'id'              => $id,
-        'user_token_id'   => $userTokenId,
-        'type'            => $type,
-        'amount'          => $amount,
-        'price_per_unit'  => $ppu,
-        'total_value'     => $totalValue,
-        'realized_pl'     => $realizedPL,
-        'created_at'      => date('Y-m-d H:i:s'),
-    ];
-    writeTable('transactions', $txs);
-    return $id;
+    return withTableWrite('transactions', function (array &$txs) use ($userTokenId, $type, $amount, $ppu, $totalValue, $realizedPL): int {
+        $id = nextId($txs);
+        $txs[] = [
+            'id'              => $id,
+            'user_token_id'   => $userTokenId,
+            'type'            => $type,
+            'amount'          => $amount,
+            'price_per_unit'  => $ppu,
+            'total_value'     => $totalValue,
+            'realized_pl'     => $realizedPL,
+            'created_at'      => date('Y-m-d H:i:s'),
+        ];
+        return $id;
+    });
 }
 
 function dbGetTokenStats(int $userTokenId): array
@@ -192,17 +228,17 @@ function dbGetTokenStats(int $userTokenId): array
 function dbUpdateUser(int $id, array $fields): bool
 {
     $allowed = ['username', 'email', 'password_hash'];
-    $users = readTable('users');
-    foreach ($users as &$u) {
-        if ($u['id'] === $id) {
-            foreach ($fields as $k => $v) {
-                if (in_array($k, $allowed, true)) $u[$k] = $v;
+    return withTableWrite('users', function (array &$users) use ($id, $fields, $allowed): bool {
+        foreach ($users as &$u) {
+            if ($u['id'] === $id) {
+                foreach ($fields as $k => $v) {
+                    if (in_array($k, $allowed, true)) $u[$k] = $v;
+                }
+                return true;
             }
-            writeTable('users', $users);
-            return true;
         }
-    }
-    return false;
+        return false;
+    });
 }
 
 function dbPurgeAll(): void
