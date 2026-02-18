@@ -46,12 +46,24 @@ $plTimeline   = $pl['timeline'];
 $plPercent    = ($costBasis > 0) ? (($unrealizedPL / $costBasis) * 100) : 0;
 $totalPercent = ($totalSpent > 0) ? (($totalPL / $totalSpent) * 100) : 0;
 
-$graphData = json_encode(array_map(fn($p) => [
+$lastCumRealized = !empty($plTimeline) ? end($plTimeline)['cum_realized'] : 0;
+
+$graphPoints = array_map(fn($p) => [
     'date'         => $p['date'],
     'total_pl'     => round($p['total_pl'], 2),
     'unrealized'   => round($p['unrealized'], 2),
     'cum_realized' => round($p['cum_realized'], 2),
-], $plTimeline));
+], $plTimeline);
+
+$graphPoints[] = [
+    'date'         => date('Y-m-d H:i:s'),
+    'total_pl'     => round($totalPL, 2),
+    'unrealized'   => round($unrealizedPL, 2),
+    'cum_realized' => round($lastCumRealized, 2),
+    'is_now'       => true,
+];
+
+$graphData = json_encode($graphPoints);
 
 layoutHead(e($token['symbol']));
 layoutNav($user);
@@ -245,6 +257,22 @@ layoutNav($user);
                             <td class="<?= plClass($row['total_pl']) ?>"><?= formatPL($row['total_pl']) ?></td>
                         </tr>
                         <?php endforeach; ?>
+                        <?php
+                            $nowCumRealized = $lastCumRealized;
+                        ?>
+                        <tr class="now-row" data-live-now="1"
+                            data-cum-realized="<?= $nowCumRealized ?>">
+                            <td data-live-now="date"><?= date('M d, Y H:i') ?></td>
+                            <td><span class="badge badge-now">Now</span></td>
+                            <td data-live-now="price">$<?= number_format($price, 6) ?></td>
+                            <td data-live-now="holdingVal"><?= formatUSD($currentValue) ?></td>
+                            <td><?= formatCrypto($holdings) ?></td>
+                            <td>$<?= number_format($avgBuy, 6) ?></td>
+                            <td>–</td>
+                            <td class="<?= plClass($nowCumRealized) ?>"><?= formatPL($nowCumRealized) ?></td>
+                            <td class="<?= plClass($unrealizedPL) ?>" data-live-now="unrealized"><?= formatPL($unrealizedPL) ?></td>
+                            <td class="<?= plClass($totalPL) ?>" data-live-now="totalPL"><?= formatPL($totalPL) ?></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -313,11 +341,10 @@ layoutNav($user);
 
     <script>
     (function() {
-        const data = <?= $graphData ?>;
-        if (!data.length) return;
+        window._plGraphData = <?= $graphData ?>;
 
         const canvas = document.getElementById('plGraph');
-        if (!canvas || !canvas.getContext) return;
+        if (!canvas || !canvas.getContext || !window._plGraphData.length) return;
 
         const ctx = canvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
@@ -328,7 +355,10 @@ layoutNav($user);
             cumRealized: { line: '#00cec9', fill: 'rgba(0,206,201,0.08)', dot: '#00cec9' },
         };
 
-        function draw() {
+        window._drawPLGraph = function() {
+            const data = window._plGraphData;
+            if (!data.length) return;
+
             const rect = canvas.parentElement.getBoundingClientRect();
             canvas.width  = rect.width * dpr;
             canvas.height = 320 * dpr;
@@ -355,7 +385,6 @@ layoutNav($user);
             function xPos(i) { return pad.left + (data.length === 1 ? gW / 2 : (i / (data.length - 1)) * gW); }
             function yPos(v) { return pad.top + gH - ((v - minV) / (maxV - minV)) * gH; }
 
-            // Grid lines & Y labels
             ctx.strokeStyle = 'rgba(255,255,255,0.06)';
             ctx.lineWidth = 1;
             const gridN = 5;
@@ -369,7 +398,6 @@ layoutNav($user);
                 ctx.fillText('$' + val.toFixed(2), pad.left - 8, y + 4);
             }
 
-            // Zero line
             const zeroY = yPos(0);
             if (zeroY >= pad.top && zeroY <= pad.top + gH) {
                 ctx.strokeStyle = 'rgba(255,255,255,0.15)';
@@ -378,7 +406,6 @@ layoutNav($user);
                 ctx.setLineDash([]);
             }
 
-            // Gradient fill under Total P/L line
             const lastTotal = data[data.length - 1].total_pl;
             const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + gH);
             if (lastTotal >= 0) {
@@ -396,7 +423,6 @@ layoutNav($user);
             ctx.fillStyle = grad;
             ctx.fill();
 
-            // Draw helper: line + dots
             function drawLine(key, color, lineW, dashPattern) {
                 ctx.beginPath();
                 ctx.setLineDash(dashPattern || []);
@@ -411,12 +437,14 @@ layoutNav($user);
                 ctx.setLineDash([]);
 
                 data.forEach((d, i) => {
+                    const isNow = d.is_now && i === data.length - 1;
+                    const r = isNow ? 5 : 3;
                     ctx.beginPath();
-                    ctx.arc(xPos(i), yPos(d[key]), 3, 0, Math.PI * 2);
+                    ctx.arc(xPos(i), yPos(d[key]), r, 0, Math.PI * 2);
                     ctx.fillStyle = color.dot;
                     ctx.fill();
-                    ctx.strokeStyle = '#0b0d14';
-                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = isNow ? '#fff' : '#0b0d14';
+                    ctx.lineWidth = isNow ? 2 : 1.5;
                     ctx.stroke();
                 });
             }
@@ -425,7 +453,17 @@ layoutNav($user);
             drawLine('unrealized',   COLORS.unrealized,  2, [3, 3]);
             drawLine('total_pl',     COLORS.totalPL,     2.5);
 
-            // X labels
+            // "Now" label on last point
+            const last = data[data.length - 1];
+            if (last.is_now) {
+                const nx = xPos(data.length - 1);
+                const ny = yPos(last.total_pl);
+                ctx.fillStyle = '#6c5ce7';
+                ctx.font = '600 10px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('NOW', nx, ny - 10);
+            }
+
             ctx.fillStyle = '#7c819a';
             ctx.font = '10px Inter, sans-serif';
             ctx.textAlign = 'center';
@@ -433,16 +471,21 @@ layoutNav($user);
             const step = Math.max(1, Math.floor(data.length / maxLabels));
             for (let i = 0; i < data.length; i += step) {
                 const d = new Date(data[i].date);
-                ctx.fillText(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), xPos(i), H - pad.bottom + 18);
+                const label = data[i].is_now ? 'Now' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                ctx.fillText(label, xPos(i), H - pad.bottom + 18);
+            }
+            // Always label the last point if not already labelled
+            if ((data.length - 1) % step !== 0) {
+                const d = data[data.length - 1];
+                const label = d.is_now ? 'Now' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                ctx.fillText(label, xPos(data.length - 1), H - pad.bottom + 18);
             }
 
-            // Title
             ctx.fillStyle = '#e4e7ef';
             ctx.font = '600 12px Inter, sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText('P/L Over Time', pad.left, 18);
 
-            // Legend
             const legendY = H - 10;
             const legends = [
                 { label: 'Total P/L',       color: COLORS.totalPL.line },
@@ -460,10 +503,10 @@ layoutNav($user);
                 ctx.fillText(lg.label, lx, legendY);
                 lx += ctx.measureText(lg.label).width + 20;
             });
-        }
+        };
 
-        draw();
-        window.addEventListener('resize', draw);
+        window._drawPLGraph();
+        window.addEventListener('resize', window._drawPLGraph);
     })();
     </script>
 

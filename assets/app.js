@@ -345,6 +345,47 @@ document.addEventListener('DOMContentLoaded', () => {
             flashEl(totalEl);
         }
         if (totalPctEl) { totalPctEl.textContent = '(' + formatPercentJS(totalPct, 2) + ')'; }
+
+        // Update "Now" row in analytics table
+        const nowRow = document.querySelector('tr[data-live-now="1"]');
+        if (nowRow) {
+            const cumReal = parseFloat(nowRow.dataset.cumRealized) || 0;
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+                + ' ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+            const nDate = nowRow.querySelector('[data-live-now="date"]');
+            const nPrice = nowRow.querySelector('[data-live-now="price"]');
+            const nHoldVal = nowRow.querySelector('[data-live-now="holdingVal"]');
+            const nUnreal = nowRow.querySelector('[data-live-now="unrealized"]');
+            const nTotal = nowRow.querySelector('[data-live-now="totalPL"]');
+
+            if (nDate) nDate.textContent = dateStr;
+            if (nPrice) { nPrice.textContent = '$' + newPrice.toFixed(6); flashEl(nPrice); }
+            if (nHoldVal) { nHoldVal.textContent = formatUSD(newCurrVal, dec); flashEl(nHoldVal); }
+            if (nUnreal) {
+                nUnreal.textContent = formatPLJS(newUnreal, dec);
+                nUnreal.className = plClassJS(newUnreal);
+                flashEl(nUnreal);
+            }
+            if (nTotal) {
+                nTotal.textContent = formatPLJS(newTotal, dec);
+                nTotal.className = plClassJS(newTotal);
+                flashEl(nTotal);
+            }
+        }
+
+        // Update graph "Now" point and redraw
+        if (window._plGraphData && window._drawPLGraph) {
+            const gd = window._plGraphData;
+            const last = gd[gd.length - 1];
+            if (last && last.is_now) {
+                last.date = new Date().toISOString().slice(0, 19).replace('T', ' ');
+                last.total_pl = Math.round(newTotal * 100) / 100;
+                last.unrealized = Math.round(newUnreal * 100) / 100;
+            }
+            window._drawPLGraph();
+        }
     }
 
     function parsePLText(text) {
