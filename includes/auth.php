@@ -3,7 +3,9 @@
  * Authentication helpers.
  */
 
-require_once __DIR__ . '/db.php';
+if (!function_exists('dbGetUserById')) {
+    require_once __DIR__ . '/db.php';
+}
 
 function currentUser(): ?array
 {

@@ -74,12 +74,15 @@ define('APP_BASE_PATH', __DIR__ . '/tmp_test_data');
 if (is_dir(APP_BASE_PATH)) {
     array_map('unlink', glob(APP_BASE_PATH . '/database/*.json'));
     array_map('unlink', glob(APP_BASE_PATH . '/database/*.tmp.*'));
+    array_map('unlink', glob(APP_BASE_PATH . '/database/*.sqlite'));
     @rmdir(APP_BASE_PATH . '/database');
     @unlink(APP_BASE_PATH . '/.env');
     @rmdir(APP_BASE_PATH);
 }
 
-mkdir(APP_BASE_PATH, 0755, true);
+if (!is_dir(APP_BASE_PATH)) {
+    mkdir(APP_BASE_PATH, 0755, true);
+}
 
 file_put_contents(APP_BASE_PATH . '/.env', implode("\n", [
     'APP_NAME=CrypTracker_Test',
@@ -94,7 +97,7 @@ if (session_status() === PHP_SESSION_NONE) {
 /* ── Load application code ──────────────────────────────────── */
 
 require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/json_db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
 
@@ -154,6 +157,7 @@ echo "════════════════════════�
 
 array_map('unlink', glob(APP_BASE_PATH . '/database/*.json'));
 array_map('unlink', glob(APP_BASE_PATH . '/database/*.tmp.*'));
+array_map('unlink', glob(APP_BASE_PATH . '/database/*.sqlite'));
 @rmdir(APP_BASE_PATH . '/database');
 @unlink(APP_BASE_PATH . '/.env');
 @rmdir(APP_BASE_PATH);

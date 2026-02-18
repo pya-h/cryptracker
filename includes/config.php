@@ -35,6 +35,7 @@ function env(string $key, $default = null)
 
 if (!defined('APP_NAME'))         define('APP_NAME',         env('APP_NAME', 'CrypTracker'));
 if (!defined('CMC_API_KEY'))      define('CMC_API_KEY',      env('CMC_API_KEY', ''));
+if (!defined('PREFERRED_DATABASE_TYPE'))      define('PREFERRED_DATABASE_TYPE',      env('PREFERRED_DATABASE_TYPE', ''));
 if (!defined('SESSION_LIFETIME')) define('SESSION_LIFETIME', (int) env('SESSION_LIFETIME', 86400));
 
 if (php_sapi_name() !== 'cli' && session_status() === PHP_SESSION_NONE) {

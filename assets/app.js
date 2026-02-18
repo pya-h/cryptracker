@@ -101,6 +101,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const exportJsonBtn = document.getElementById('exportJson');
+
+    function triggerDownload(url) {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        setTimeout(() => iframe.remove(), 15000);
+    }
+
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', () => {
+            if (menuWrap) menuWrap.classList.remove('open');
+            const main = document.querySelector('main[data-page]');
+            if (!main) return;
+
+            const page = main.dataset.page;
+            if (page === 'dashboard') {
+                const url = 'export_json.php?page=dashboard';
+                triggerDownload(url);
+                return;
+            }
+
+            if (page === 'token') {
+                const tokenId = encodeURIComponent(main.dataset.tokenId || '');
+                if (!tokenId) return;
+                triggerDownload('export_json.php?page=token&id=' + tokenId + '&part=transactions');
+                setTimeout(() => {
+                    triggerDownload('export_json.php?page=token&id=' + tokenId + '&part=analytics');
+                }, 350);
+            }
+        });
+    }
+
     /* ── Stagger-animate cards on load ────────────────────── */
 
     document.querySelectorAll(

@@ -370,6 +370,9 @@ function layoutNav(array $user): void
                     <button type="button" class="user-menu-item" id="exportCsv">
                         <span class="menu-icon">⤓</span> Export to CSV
                     </button>
+                    <button type="button" class="user-menu-item" id="exportJson">
+                        <span class="menu-icon">⎙</span> Export to JSON
+                    </button>
                     <div class="user-menu-divider"></div>
                     <form method="POST" action="logout.php" class="menu-logout-form">
                         ' . csrfField() . '
