@@ -55,7 +55,10 @@ layoutHead(e($token['symbol']));
 layoutNav($user);
 ?>
 
-    <main class="container" data-page="token" data-token-id="<?= (int)$tokenId ?>">
+    <main class="container" data-page="token" data-token-id="<?= (int)$tokenId ?>"
+          data-cmc-id="<?= (int)$token['cmc_id'] ?>"
+          data-holdings="<?= $holdings ?>"
+          data-cost-basis="<?= $costBasis ?>">
         <a href="index.php" class="back-link">&larr; Back to Dashboard</a>
 
         <section class="token-header">
@@ -66,8 +69,8 @@ layoutNav($user);
                     <span class="symbol-badge"><?= e($token['symbol']) ?></span>
                 </h1>
                 <p class="live-price">
-                    Current Price: <strong>$<?= number_format($price, 6) ?></strong>
-                    <span class="price-badge <?= plClass($change24) ?>"><?= formatPercent($change24) ?></span>
+                    Current Price: <strong data-live="price">$<?= number_format($price, 6) ?></strong>
+                    <span class="price-badge <?= plClass($change24) ?>" data-live="change24"><?= formatPercent($change24) ?></span>
                 </p>
             </div>
         </section>
@@ -77,24 +80,24 @@ layoutNav($user);
         <section class="pl-cards">
             <div class="pl-card">
                 <h3>Realized P/L</h3>
-                <p class="pl-value <?= plClass($realizedPL) ?>">
+                <p class="pl-value <?= plClass($realizedPL) ?>" data-countup="<?= $realizedPL ?>" data-pl="1">
                     <?= formatPL($realizedPL) ?>
                 </p>
                 <small>From completed sells vs buy cost</small>
             </div>
             <div class="pl-card">
                 <h3>Unrealized P/L</h3>
-                <p class="pl-value <?= plClass($unrealizedPL) ?>">
+                <p class="pl-value <?= plClass($unrealizedPL) ?>" data-countup="<?= $unrealizedPL ?>" data-pl="1" data-live="unrealizedPL">
                     <?= formatPL($unrealizedPL) ?>
-                    <span class="pl-percent">(<?= formatPercent($plPercent) ?>)</span>
+                    <span class="pl-percent" data-live="unrealizedPercent">(<?= formatPercent($plPercent) ?>)</span>
                 </p>
                 <small>If you sell <?= formatCrypto($holdings) ?> <?= e($token['symbol']) ?> now</small>
             </div>
             <div class="pl-card highlight">
                 <h3>Total P/L</h3>
-                <p class="pl-value <?= plClass($totalPL) ?>">
+                <p class="pl-value <?= plClass($totalPL) ?>" data-countup="<?= $totalPL ?>" data-pl="1" data-live="totalPL">
                     <?= formatPL($totalPL) ?>
-                    <span class="pl-percent">(<?= formatPercent($totalPercent) ?>)</span>
+                    <span class="pl-percent" data-live="totalPercent">(<?= formatPercent($totalPercent) ?>)</span>
                 </p>
                 <small>Realized + Unrealized</small>
             </div>
@@ -105,7 +108,7 @@ layoutNav($user);
                 <div><span class="label">Holdings</span><span class="val"><?= formatCrypto($holdings) ?> <?= e($token['symbol']) ?></span></div>
                 <div><span class="label">Avg Buy Price</span><span class="val">$<?= number_format($avgBuy, 6) ?></span></div>
                 <div><span class="label">Cost Basis</span><span class="val"><?= formatUSD($costBasis) ?></span></div>
-                <div><span class="label">Current Value</span><span class="val"><?= formatUSD($currentValue) ?></span></div>
+                <div><span class="label">Current Value</span><span class="val" data-live="currentVal"><?= formatUSD($currentValue) ?></span></div>
             </div>
         </section>
 

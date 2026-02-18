@@ -4,12 +4,14 @@
  */
 
 require_once __DIR__ . '/config.php';
+
 function sendSecurityHeaders(): void
 {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('X-XSS-Protection: 1; mode=block');
     header('Referrer-Policy: strict-origin-when-cross-origin');
+    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'");
 }
 function csrfToken(): string
 {
@@ -44,7 +46,6 @@ function plClass(float $v): string
     return $v >= 0 ? 'profit' : 'loss';
 }
 
-/** +$100.00 or -$100.00 sign placement */
 function formatPL(float $v, int $decimals = -1): string
 {
     if ($decimals < 0) $decimals = precision();
@@ -74,7 +75,6 @@ function formatPercent(float $v, int $decimals = -1): string
     return $sign . number_format($v, $decimals) . '%';
 }
 
-/** Abbreviate large numbers: 1.2B, 340.5M, 12.3K */
 function formatBigNum(float $v): string
 {
     $p = precision();
@@ -85,7 +85,6 @@ function formatBigNum(float $v): string
     return '$' . number_format($v, $p);
 }
 
-/** Abbreviate supply numbers without currency sign */
 function formatSupply(float $v): string
 {
     if ($v <= 0) return '—';
@@ -117,12 +116,7 @@ function theme(): string
 }
 
 /**
- * Unified P/L calculator supporting two modes:
- *   'avg'  — weighted-average cost basis
- *   'fifo' — exact/FIFO: sells consume oldest buy lots first
- *
- * Returns holdings, cost basis, realized/unrealized/total PL, and a timeline
- * suitable for the analytics table and canvas graph.
+ * P/L calculator: 'avg' (weighted-average) or 'fifo' (oldest lots first).
  */
 function calcTokenPL(int $tokenId, float $currentPrice, string $mode = 'avg'): array
 {
@@ -203,7 +197,6 @@ function _calcAvg(array $txs, float $currentPrice): array
     ];
 }
 
-/** FIFO: sells consume oldest buy lots first */
 function _calcFifo(array $txs, float $currentPrice): array
 {
     $lots        = [];

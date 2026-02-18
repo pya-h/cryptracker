@@ -1,12 +1,7 @@
 <?php
 /**
  * Handle Buy / Sell transactions.
- *
- * POST: user_token_id, type (buy|sell), amount, price_per_unit
- *
- * P/L on sell uses the active mode:
- *   avg:  realized_pl = amount × (sell_price - weighted_avg_buy)
- *   fifo: realized_pl = sell_revenue - cost_of_consumed_lots (oldest first)
+ * P/L on sell uses the active mode (avg or fifo).
  */
 
 require_once __DIR__ . '/includes/auth.php';

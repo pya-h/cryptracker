@@ -1,16 +1,21 @@
 <?php
 /**
  * Crypto price API wrapper.
- *
- * Primary:  CoinLore (free, no API key needed)
- * Fallback: CoinMarketCap (if CMC_API_KEY is set in .env)
+ * Primary: CoinLore (free, no key). Fallback: CoinMarketCap.
  */
 
 require_once __DIR__ . '/config.php';
+
 function httpGet(string $url, array $extraHeaders = [], int $timeout = 15): ?string
 {
     $headers = "Accept: application/json\r\n";
     foreach ($extraHeaders as $h) $headers .= $h . "\r\n";
+
+    $sslOpts = ['verify_peer' => true, 'verify_peer_name' => true];
+    $caBundle = '/etc/ssl/certs/ca-certificates.crt';
+    if (file_exists($caBundle)) {
+        $sslOpts['cafile'] = $caBundle;
+    }
 
     $context = stream_context_create([
         'http' => [
@@ -19,14 +24,12 @@ function httpGet(string $url, array $extraHeaders = [], int $timeout = 15): ?str
             'timeout'       => $timeout,
             'ignore_errors' => true,
         ],
-        'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+        'ssl' => $sslOpts,
     ]);
 
     $res = @file_get_contents($url, false, $context);
     return ($res !== false) ? $res : null;
 }
-
-/** CoinLore API (primary – no API key needed) */
 
 function coinloreCacheFile(): string
 {
@@ -73,8 +76,8 @@ function coinloreGetAll(): array
 
 function coinloreSearch(string $query): array
 {
-    $coins  = coinloreGetAll();
-    $query  = strtolower(trim($query));
+    $coins = coinloreGetAll();
+    $query = strtolower(trim($query));
     if ($query === '') return [];
 
     $result = [];
@@ -97,8 +100,8 @@ function coinloreGetQuotes(array $ids): array
 {
     if (empty($ids)) return [];
 
-    $ids  = array_map('intval', $ids);
-    $raw  = httpGet("https://api.coinlore.net/api/ticker/?id=" . implode(',', $ids));
+    $ids = array_map('intval', $ids);
+    $raw = httpGet("https://api.coinlore.net/api/ticker/?id=" . implode(',', $ids));
     if (!$raw) return [];
 
     $coins = json_decode($raw, true);
@@ -122,8 +125,6 @@ function coinloreGetQuotes(array $ids): array
     }
     return $out;
 }
-
-/** CoinMarketCap API (fallback – requires API key) */
 
 function cmcRequest(string $endpoint, array $params = []): ?array
 {
@@ -188,8 +189,6 @@ function cmcGetQuotes(array $cmcIds): array
     }
     return $out;
 }
-
-/** Unified public API (CoinLore first, then CMC fallback) */
 
 function apiSearchCoins(string $query): array
 {

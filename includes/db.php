@@ -1,7 +1,6 @@
 <?php
 /**
  * JSON-file based database.
- * Data stored in /database/ as JSON files: users.json, user_tokens.json, transactions.json
  */
 
 require_once __DIR__ . '/config.php';

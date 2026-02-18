@@ -58,23 +58,23 @@ layoutNav($user);
         <section class="portfolio-summary">
             <div class="summary-card stagger-1">
                 <span class="summary-label">Total Invested</span>
-                <span class="summary-value"><?= formatUSD($totalInvested) ?></span>
+                <span class="summary-value" data-countup="<?= $totalInvested ?>" data-prefix="$"><?= formatUSD($totalInvested) ?></span>
             </div>
             <div class="summary-card stagger-2">
                 <span class="summary-label">Realized P/L</span>
-                <span class="summary-value <?= plClass($totalRealPL) ?>">
+                <span class="summary-value <?= plClass($totalRealPL) ?>" data-countup="<?= $totalRealPL ?>" data-pl="1">
                     <?= formatPL($totalRealPL) ?>
                 </span>
             </div>
             <div class="summary-card stagger-3">
                 <span class="summary-label">Unrealized P/L</span>
-                <span class="summary-value <?= plClass($totalImagPL) ?>">
+                <span class="summary-value <?= plClass($totalImagPL) ?>" data-countup="<?= $totalImagPL ?>" data-pl="1" data-live="unrealized-total">
                     <?= formatPL($totalImagPL) ?>
                 </span>
             </div>
             <div class="summary-card highlight stagger-4">
                 <span class="summary-label">Total P/L</span>
-                <span class="summary-value <?= plClass($totalPL) ?>">
+                <span class="summary-value <?= plClass($totalPL) ?>" data-countup="<?= $totalPL ?>" data-pl="1" data-live="total-pl-total">
                     <?= formatPL($totalPL) ?>
                 </span>
             </div>
@@ -110,25 +110,28 @@ layoutNav($user);
                     </thead>
                     <tbody>
                         <?php foreach ($summaries as $s): ?>
-                        <tr class="clickable-row" data-href="token.php?id=<?= (int)$s['token']['id'] ?>">
+                        <tr class="clickable-row" data-href="token.php?id=<?= (int)$s['token']['id'] ?>"
+                            data-cmc-id="<?= (int)$s['token']['cmc_id'] ?>"
+                            data-holdings="<?= $s['holdings'] ?>"
+                            data-cost-basis="<?= $s['invested'] ?>">
                             <td>
                                 <strong><?= e($s['token']['symbol']) ?></strong>
                                 <small><?= e($s['token']['name']) ?></small>
                             </td>
-                            <td><?= formatUSD($s['price'], $tblPrec) ?></td>
-                            <td class="<?= plClass($s['change24']) ?>">
+                            <td data-live="price"><?= formatUSD($s['price'], $tblPrec) ?></td>
+                            <td class="<?= plClass($s['change24']) ?>" data-live="change24">
                                 <?= formatPercent($s['change24'], $tblPrec) ?>
                             </td>
                             <td><?= formatCrypto($s['holdings'], $tblPrec) ?></td>
                             <td><?= formatUSD($s['avgBuy'], $tblPrec) ?></td>
-                            <td><?= formatUSD($s['currentVal'], $tblPrec) ?></td>
+                            <td data-live="currentVal"><?= formatUSD($s['currentVal'], $tblPrec) ?></td>
                             <td class="<?= plClass($s['realizedPL']) ?>">
                                 <?= formatPL($s['realizedPL'], $tblPrec) ?>
                             </td>
-                            <td class="<?= plClass($s['unrealizedPL']) ?>">
+                            <td class="<?= plClass($s['unrealizedPL']) ?>" data-live="unrealizedPL">
                                 <?= formatPL($s['unrealizedPL'], $tblPrec) ?>
                             </td>
-                            <td class="<?= plClass($s['totalPL']) ?>">
+                            <td class="<?= plClass($s['totalPL']) ?>" data-live="totalPL">
                                 <?= formatPL($s['totalPL'], $tblPrec) ?>
                             </td>
                         </tr>

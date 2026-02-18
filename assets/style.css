@@ -99,6 +99,16 @@ a:hover { color: var(--primary-h); }
     100% { transform: rotate(360deg); opacity: .4; }
 }
 
+@keyframes liveFlash {
+    0%   { background-color: rgba(0, 212, 161, .18); }
+    100% { background-color: transparent; }
+}
+
+.live-flash {
+    animation: liveFlash .6s ease-out;
+    border-radius: 4px;
+}
+
 .animate-fade-in     { animation: fadeIn .5s ease both; }
 .animate-fade-in-up  { animation: fadeInUp .5s ease both; }
 .animate-slide-down  { animation: slideDown .4s ease both; }
