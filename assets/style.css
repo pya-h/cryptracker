@@ -597,6 +597,97 @@ form .btn { margin-top: 1.2rem; }
 .tx-history { margin-bottom: 2rem; animation: fadeInUp .5s ease .3s both; }
 .tx-history h2 { font-size: 1.1rem; margin-bottom: .75rem; font-weight: 600; }
 
+/* ── Market Data ──────────────────────────────────────────── */
+
+.market-data-section {
+    margin-bottom: 1.5rem;
+}
+
+.market-data-section h2 {
+    font-size: 1.1rem; margin-bottom: .75rem; font-weight: 600;
+}
+
+.market-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: .6rem;
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem 1.4rem;
+}
+
+.market-item {
+    padding: .5rem .6rem;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+}
+
+.market-item:hover {
+    background: rgba(124,106,239,.04);
+}
+
+.market-item .label {
+    display: block;
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.market-item .val {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-top: .15rem;
+    display: block;
+}
+
+/* ── Rank Badge ───────────────────────────────────────────── */
+
+.rank-badge {
+    background: rgba(255,192,72,.12);
+    color: var(--yellow);
+    padding: .15rem .55rem;
+    border-radius: var(--radius-sm);
+    font-size: .8rem;
+    font-weight: 700;
+    border: 1px solid rgba(255,192,72,.2);
+    margin-right: .3rem;
+}
+
+/* ── P/L Analytics ────────────────────────────────────────── */
+
+.pl-analytics {
+    margin-bottom: 2rem;
+}
+
+.pl-analytics h2 {
+    font-size: 1.1rem; margin-bottom: .75rem; font-weight: 600;
+}
+
+.graph-container {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.graph-container canvas {
+    display: block;
+    width: 100%;
+}
+
+.analytics-table th,
+.analytics-table td {
+    font-size: .78rem;
+    padding: .6rem .7rem;
+}
+
 /* ── Danger Zone ──────────────────────────────────────────── */
 
 .danger-zone {
@@ -670,6 +761,7 @@ form .btn { margin-top: 1.2rem; }
     .trade-forms { grid-template-columns: 1fr; }
     .pl-cards { grid-template-columns: 1fr; }
     .info-grid { grid-template-columns: 1fr 1fr; }
+    .market-grid { grid-template-columns: 1fr 1fr; }
     .auth-card { padding: 2rem 1.5rem; }
 }
 
@@ -677,6 +769,7 @@ form .btn { margin-top: 1.2rem; }
     html { font-size: 14px; }
     .portfolio-summary { grid-template-columns: 1fr; }
     .info-grid { grid-template-columns: 1fr; }
+    .market-grid { grid-template-columns: 1fr; }
     .navbar { flex-wrap: wrap; gap: .5rem; }
 }
 

@@ -4,8 +4,6 @@
  */
 
 require_once __DIR__ . '/config.php';
-
-
 function sendSecurityHeaders(): void
 {
     header('X-Content-Type-Options: nosniff');
@@ -13,8 +11,6 @@ function sendSecurityHeaders(): void
     header('X-XSS-Protection: 1; mode=block');
     header('Referrer-Policy: strict-origin-when-cross-origin');
 }
-
-
 function csrfToken(): string
 {
     if (empty($_SESSION['csrf_token'])) {
@@ -73,12 +69,31 @@ function formatPercent(float $v, int $decimals = 2): string
     return $sign . number_format($v, $decimals) . '%';
 }
 
+/** Abbreviate large numbers: 1.2B, 340.5M, 12.3K */
+function formatBigNum(float $v): string
+{
+    if ($v >= 1e12) return '$' . number_format($v / 1e12, 2) . 'T';
+    if ($v >= 1e9)  return '$' . number_format($v / 1e9, 2) . 'B';
+    if ($v >= 1e6)  return '$' . number_format($v / 1e6, 2) . 'M';
+    if ($v >= 1e3)  return '$' . number_format($v / 1e3, 2) . 'K';
+    return '$' . number_format($v, 2);
+}
+
+/** Abbreviate supply numbers without currency sign */
+function formatSupply(float $v): string
+{
+    if ($v <= 0) return '—';
+    if ($v >= 1e12) return number_format($v / 1e12, 2) . 'T';
+    if ($v >= 1e9)  return number_format($v / 1e9, 2) . 'B';
+    if ($v >= 1e6)  return number_format($v / 1e6, 2) . 'M';
+    if ($v >= 1e3)  return number_format($v / 1e3, 2) . 'K';
+    return number_format($v, 0);
+}
+
 function e(string $s): string
 {
     return htmlspecialchars($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
-
-
 function flash(string $type, string $message): void
 {
     $_SESSION['flash'][] = ['type' => $type, 'message' => $message];
@@ -100,8 +115,6 @@ function renderFlashes(): string
     }
     return $html;
 }
-
-
 function layoutHead(string $title, bool $authPage = false): void
 {
     sendSecurityHeaders();
@@ -116,6 +129,7 @@ function layoutHead(string $title, bool $authPage = false): void
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/style.css">
+    <meta name="csrf-token" content="' . e(csrfToken()) . '">
 </head>
 <body ' . $bodyClass . '>';
 }

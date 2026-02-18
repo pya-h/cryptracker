@@ -1,11 +1,4 @@
-/**
- * CrypTracker – Frontend JavaScript (v2)
- * Fixes: XSS in attribute values, adds CSRF tokens to search forms.
- */
-
 document.addEventListener('DOMContentLoaded', () => {
-
-    /* ── Auto-dismiss alerts after 6s ─────────────────────── */
 
     document.querySelectorAll('.alert').forEach(alert => {
         setTimeout(() => {
@@ -15,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 6000);
     });
 
-    /* ── Clickable table rows ─────────────────────────────── */
 
     document.querySelectorAll('.clickable-row').forEach(row => {
         row.addEventListener('click', (e) => {
@@ -26,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    /* ── Token search (debounced) ─────────────────────────── */
 
     const searchInput   = document.getElementById('tokenSearch');
     const searchResults = document.getElementById('searchResults');

@@ -8,18 +8,9 @@ require_once __DIR__ . '/includes/api.php';
 require_once __DIR__ . '/includes/helpers.php';
 
 $user = requireAuth();
-
-/* ── Fetch user tokens ──────────────────────────────────────── */
-
 $tokens = dbGetUserTokens($user['id']);
-
-/* ── Gather IDs and fetch live quotes ───────────────────────── */
-
 $cmcIds = array_column($tokens, 'cmc_id');
 $quotes = $cmcIds ? apiGetQuotes($cmcIds) : [];
-
-/* ── Compute per-token summary ──────────────────────────────── */
-
 $summaries     = [];
 $totalRealPL   = 0;
 $totalImagPL   = 0;
@@ -75,13 +66,8 @@ layoutNav($user);
 
     <main class="container">
 
-        <!-- Flash messages -->
         <?= renderFlashes() ?>
 
-        <!-- CSRF meta for JS -->
-        <meta name="csrf-token" content="<?= e(csrfToken()) ?>">
-
-        <!-- Portfolio Overview -->
         <section class="portfolio-summary">
             <div class="summary-card stagger-1">
                 <span class="summary-label">Total Invested</span>
@@ -107,7 +93,6 @@ layoutNav($user);
             </div>
         </section>
 
-        <!-- Add Token -->
         <section class="add-token-section">
             <h2>Add Token</h2>
             <div class="search-wrapper">
@@ -116,7 +101,6 @@ layoutNav($user);
             </div>
         </section>
 
-        <!-- Token Table -->
         <section class="token-table-section">
             <h2>Your Tokens</h2>
             <?php if (empty($summaries)): ?>

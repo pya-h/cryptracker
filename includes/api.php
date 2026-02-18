@@ -7,9 +7,6 @@
  */
 
 require_once __DIR__ . '/config.php';
-
-/* ── Generic HTTP helper ────────────────────────────────────── */
-
 function httpGet(string $url, array $extraHeaders = [], int $timeout = 15): ?string
 {
     $headers = "Accept: application/json\r\n";
@@ -111,9 +108,16 @@ function coinloreGetQuotes(array $ids): array
     foreach ($coins as $c) {
         $out[(int)$c['id']] = [
             'price'              => (float)($c['price_usd'] ?? 0),
+            'percent_change_1h'  => (float)($c['percent_change_1h'] ?? 0),
             'percent_change_24h' => (float)($c['percent_change_24h'] ?? 0),
             'percent_change_7d'  => (float)($c['percent_change_7d'] ?? 0),
             'market_cap'         => (float)($c['market_cap_usd'] ?? 0),
+            'volume_24h'         => (float)($c['volume24'] ?? 0),
+            'volume_24h_native'  => (float)($c['volume24a'] ?? 0),
+            'csupply'            => (float)($c['csupply'] ?? 0),
+            'tsupply'            => (float)($c['tsupply'] ?? 0),
+            'msupply'            => (float)($c['msupply'] ?? 0),
+            'rank'               => (int)($c['rank'] ?? 0),
         ];
     }
     return $out;
@@ -170,9 +174,16 @@ function cmcGetQuotes(array $cmcIds): array
         $q = $coin['quote']['USD'] ?? [];
         $out[(int)$id] = [
             'price'              => $q['price'] ?? 0,
+            'percent_change_1h'  => $q['percent_change_1h'] ?? 0,
             'percent_change_24h' => $q['percent_change_24h'] ?? 0,
             'percent_change_7d'  => $q['percent_change_7d'] ?? 0,
             'market_cap'         => $q['market_cap'] ?? 0,
+            'volume_24h'         => $q['volume_24h'] ?? 0,
+            'volume_24h_native'  => 0,
+            'csupply'            => $coin['circulating_supply'] ?? 0,
+            'tsupply'            => $coin['total_supply'] ?? 0,
+            'msupply'            => $coin['max_supply'] ?? 0,
+            'rank'               => $coin['cmc_rank'] ?? 0,
         ];
     }
     return $out;
