@@ -1,19 +1,38 @@
 document.addEventListener('DOMContentLoaded', () => {
 
+    /* ── Alert auto-dismiss with smooth exit ──────────────── */
+
     document.querySelectorAll('.alert').forEach(alert => {
         setTimeout(() => {
             alert.style.opacity = '0';
-            alert.style.transform = 'translateY(-10px)';
+            alert.style.transform = 'translateY(-12px)';
             setTimeout(() => alert.remove(), 400);
-        }, 6000);
+        }, 5000);
     });
 
+    /* ── Clickable table rows ─────────────────────────────── */
 
     document.querySelectorAll('.clickable-row').forEach(row => {
         row.addEventListener('click', (e) => {
             if (e.target.closest('a, button, form')) return;
             const href = row.dataset.href;
-            if (href) window.location.href = href;
+            if (href) {
+                row.style.transform = 'scale(.985)';
+                row.style.opacity = '.7';
+                setTimeout(() => { window.location.href = href; }, 120);
+            }
+        });
+    });
+
+    /* ── Button ripple position tracking ──────────────────── */
+
+    document.querySelectorAll('.btn').forEach(btn => {
+        btn.addEventListener('mousedown', (e) => {
+            const r = btn.getBoundingClientRect();
+            const x = ((e.clientX - r.left) / r.width * 100).toFixed(0);
+            const y = ((e.clientY - r.top) / r.height * 100).toFixed(0);
+            btn.style.setProperty('--ripple-x', x + '%');
+            btn.style.setProperty('--ripple-y', y + '%');
         });
     });
 
@@ -42,15 +61,20 @@ document.addEventListener('DOMContentLoaded', () => {
         openBtn.addEventListener('click', () => {
             overlay.classList.add('open');
             if (menuWrap) menuWrap.classList.remove('open');
+            requestAnimationFrame(() => { overlay.style.opacity = '1'; });
         });
-        closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+
+        const closeModal = () => {
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.classList.remove('open'), 250);
+        };
+
+        closeBtn.addEventListener('click', closeModal);
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) overlay.classList.remove('open');
+            if (e.target === overlay) closeModal();
         });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && overlay.classList.contains('open')) {
-                overlay.classList.remove('open');
-            }
+            if (e.key === 'Escape' && overlay.classList.contains('open')) closeModal();
         });
     }
 
@@ -62,6 +86,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (precSlider && precVal) {
         precSlider.addEventListener('input', () => {
             precVal.textContent = precSlider.value;
+            precVal.style.transform = 'scale(1.25)';
+            precVal.style.transition = 'transform .2s ease';
+            setTimeout(() => { precVal.style.transform = 'scale(1)'; }, 200);
         });
     }
 
@@ -84,6 +111,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    /* ── Stagger-animate cards on load ────────────────────── */
+
+    const staggerElements = document.querySelectorAll(
+        '.summary-card, .pl-card, .token-table tbody tr, .info-grid > div, .market-item'
+    );
+    staggerElements.forEach((el, i) => {
+        el.style.animationDelay = (i * 0.04) + 's';
+    });
+
+    /* ── Intersection Observer: fade-in on scroll ─────────── */
+
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+
+        document.querySelectorAll(
+            '.trade-card, .holdings-info, .tx-history, .danger-zone, .graph-container'
+        ).forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(16px)';
+            el.style.transition = 'opacity .5s ease, transform .5s ease';
+            observer.observe(el);
+        });
+    }
 
     /* ── Token Search ─────────────────────────────────────── */
 
@@ -108,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         searchResults.classList.add('open');
-        searchResults.innerHTML = '<div class="search-loading">Searching…</div>';
+        searchResults.innerHTML = '<div class="search-loading">Searching\u2026</div>';
 
         debounceTimer = setTimeout(() => fetchTokens(q), 350);
     });
@@ -138,9 +196,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             searchResults.innerHTML = '';
 
-            data.forEach(coin => {
+            data.forEach((coin, idx) => {
                 const item = document.createElement('div');
                 item.className = 'search-result-item';
+                item.style.animationDelay = (idx * 0.03) + 's';
 
                 const info = document.createElement('div');
                 const nameSpan = document.createElement('span');

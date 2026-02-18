@@ -325,6 +325,9 @@ function layoutHead(string $title, bool $authPage = false): void
 
 function layoutNav(array $user): void
 {
+    $mode = plMode();
+    $isExact = $mode === 'fifo';
+    $modeLabel = $isExact ? 'Exact' : 'Average';
     $redirect = $_SERVER['REQUEST_URI'] ?? 'index.php';
     $redirect = basename($redirect);
     if (!preg_match('/^(index\.php|token\.php\?id=\d+)$/', $redirect)) {
@@ -336,6 +339,16 @@ function layoutNav(array $user): void
             <span class="brand-icon">◈</span> ' . e(APP_NAME) . '
         </a>
         <div class="nav-right">
+            <form method="POST" action="toggle_mode.php" class="mode-toggle-form">
+                ' . csrfField() . '
+                <input type="hidden" name="redirect" value="' . e($redirect) . '">
+                <button type="submit" class="mode-toggle" data-tooltip="P/L calculation mode">
+                    <span class="mode-label">' . $modeLabel . '</span>
+                    <span class="mode-switch ' . ($isExact ? 'active' : '') . '">
+                        <span class="mode-knob"></span>
+                    </span>
+                </button>
+            </form>
             <div class="user-menu-wrapper">
                 <button type="button" class="nav-user-btn" id="userMenuBtn">
                     <span class="user-avatar">' . strtoupper(e($user['username'])[0]) . '</span>
