@@ -2,3 +2,4 @@
 database/
 *.db
 tests/tmp_test_data/
+PROJECT_CONTEXT.md
