@@ -529,90 +529,90 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput   = document.getElementById('tokenSearch');
     const searchResults = document.getElementById('searchResults');
 
-    if (!searchInput || !searchResults) return;
+    if (searchInput && searchResults) {
+        const csrfMeta  = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+        let debounceTimer = null;
 
-    const csrfMeta  = document.querySelector('meta[name="csrf-token"]');
-    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
-    let debounceTimer = null;
-
-    searchInput.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        const q = searchInput.value.trim();
-        if (q.length < 1) {
-            searchResults.classList.remove('open');
-            searchResults.innerHTML = '';
-            return;
-        }
-        searchResults.classList.add('open');
-        searchResults.innerHTML = '<div class="search-loading">Searching\u2026</div>';
-        debounceTimer = setTimeout(() => fetchTokens(q), 350);
-    });
-
-    document.addEventListener('click', e => {
-        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-            searchResults.classList.remove('open');
-        }
-    });
-
-    searchInput.addEventListener('keydown', e => {
-        if (e.key === 'Escape') { searchResults.classList.remove('open'); searchInput.blur(); }
-    });
-
-    async function fetchTokens(query) {
-        try {
-            const res  = await fetch('search_tokens.php?q=' + encodeURIComponent(query));
-            const data = await res.json();
-
-            if (!data.length) {
-                searchResults.innerHTML = '<div class="search-no-results">No tokens found.</div>';
+        searchInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const q = searchInput.value.trim();
+            if (q.length < 1) {
+                searchResults.classList.remove('open');
+                searchResults.innerHTML = '';
                 return;
             }
+            searchResults.classList.add('open');
+            searchResults.innerHTML = '<div class="search-loading">Searching\u2026</div>';
+            debounceTimer = setTimeout(() => fetchTokens(q), 350);
+        });
 
-            searchResults.innerHTML = '';
+        document.addEventListener('click', e => {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.classList.remove('open');
+            }
+        });
 
-            data.forEach((coin, idx) => {
-                const item = document.createElement('div');
-                item.className = 'search-result-item';
-                item.style.animationDelay = (idx * 0.03) + 's';
+        searchInput.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { searchResults.classList.remove('open'); searchInput.blur(); }
+        });
 
-                const info = document.createElement('div');
-                info.innerHTML = '<span class="coin-name">' + escapeHtml(coin.name) + '</span>'
-                    + '<span class="coin-symbol">' + escapeHtml(coin.symbol) + '</span>';
+        async function fetchTokens(query) {
+            try {
+                const res  = await fetch('search_tokens.php?q=' + encodeURIComponent(query));
+                const data = await res.json();
 
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = 'add_token.php';
-                form.style.margin = '0';
+                if (!data.length) {
+                    searchResults.innerHTML = '<div class="search-no-results">No tokens found.</div>';
+                    return;
+                }
 
-                [['_csrf', csrfToken], ['cmc_id', coin.id], ['symbol', coin.symbol],
-                 ['name', coin.name], ['slug', coin.slug || ''],
-                 ['coinlore_id', coin.coinlore_id || ''], ['coingecko_id', coin.coingecko_id || '']].forEach(([n, v]) => {
-                    const inp = document.createElement('input');
-                    inp.type = 'hidden'; inp.name = n; inp.value = v;
-                    form.appendChild(inp);
+                searchResults.innerHTML = '';
+
+                data.forEach((coin, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'search-result-item';
+                    item.style.animationDelay = (idx * 0.03) + 's';
+
+                    const info = document.createElement('div');
+                    info.innerHTML = '<span class="coin-name">' + escapeHtml(coin.name) + '</span>'
+                        + '<span class="coin-symbol">' + escapeHtml(coin.symbol) + '</span>';
+
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'add_token.php';
+                    form.style.margin = '0';
+
+                    [['_csrf', csrfToken], ['cmc_id', coin.id], ['symbol', coin.symbol],
+                     ['name', coin.name], ['slug', coin.slug || ''],
+                     ['coinlore_id', coin.coinlore_id || ''], ['coingecko_id', coin.coingecko_id || '']].forEach(([n, v]) => {
+                        const inp = document.createElement('input');
+                        inp.type = 'hidden'; inp.name = n; inp.value = v;
+                        form.appendChild(inp);
+                    });
+
+                    const btn = document.createElement('button');
+                    btn.type = 'submit';
+                    btn.className = 'btn btn-primary btn-sm';
+                    btn.textContent = '+ Add';
+                    form.appendChild(btn);
+
+                    btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); form.submit(); });
+                    item.appendChild(info);
+                    item.appendChild(form);
+                    item.addEventListener('click', e => { if (!e.target.closest('button')) form.submit(); });
+                    searchResults.appendChild(item);
                 });
-
-                const btn = document.createElement('button');
-                btn.type = 'submit';
-                btn.className = 'btn btn-primary btn-sm';
-                btn.textContent = '+ Add';
-                form.appendChild(btn);
-
-                btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); form.submit(); });
-                item.appendChild(info);
-                item.appendChild(form);
-                item.addEventListener('click', e => { if (!e.target.closest('button')) form.submit(); });
-                searchResults.appendChild(item);
-            });
-        } catch (_) {
-            searchResults.innerHTML = '<div class="search-no-results">Search failed. Try again.</div>';
+            } catch (_) {
+                searchResults.innerHTML = '<div class="search-no-results">Search failed. Try again.</div>';
+            }
         }
-    }
 
-    function escapeHtml(s) {
-        const d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
     }
 
     /* ═══════════════════════════════════════════════════════
