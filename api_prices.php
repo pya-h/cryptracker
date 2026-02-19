@@ -42,6 +42,10 @@ foreach ($quotes as $cmcId => $q) {
         'percent_change_7d'  => (float) ($q['percent_change_7d'] ?? 0),
         'market_cap'         => (float) ($q['market_cap'] ?? 0),
         'volume_24h'         => (float) ($q['volume_24h'] ?? 0),
+        'rank'               => (int) ($q['rank'] ?? 0),
+        'csupply'            => (float) ($q['csupply'] ?? 0),
+        'tsupply'            => (float) ($q['tsupply'] ?? 0),
+        'msupply'            => (float) ($q['msupply'] ?? 0),
     ];
 }
 

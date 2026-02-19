@@ -4,7 +4,6 @@
  */
 
 require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/api.php';
 require_once __DIR__ . '/includes/helpers.php';
 
 $user = requireAuth();
@@ -14,39 +13,31 @@ $token   = dbGetUserToken($tokenId, $user['id']);
 
 if (!$token) { header('Location: index.php'); exit; }
 
-$quotes   = apiGetQuotes([$token['cmc_id']]);
-$quote    = $quotes[$token['cmc_id']] ?? [];
-$price    = $quote['price'] ?? 0;
-$change1h = $quote['percent_change_1h'] ?? 0;
-$change24 = $quote['percent_change_24h'] ?? 0;
-$change7d = $quote['percent_change_7d'] ?? 0;
-$marketCap = $quote['market_cap'] ?? 0;
-$volume24  = $quote['volume_24h'] ?? 0;
-$csupply   = $quote['csupply'] ?? 0;
-$tsupply   = $quote['tsupply'] ?? 0;
-$msupply   = $quote['msupply'] ?? 0;
-$rank      = $quote['rank'] ?? 0;
+/* Prices loaded asynchronously via JS — page renders instantly */
+$price = 0; $change1h = 0; $change24 = 0; $change7d = 0;
+$marketCap = 0; $volume24 = 0; $csupply = 0; $tsupply = 0; $msupply = 0; $rank = 0;
 
 $allTxAsc = dbGetTransactions($tokenId);
 $allTx    = array_reverse($allTxAsc);
 
 $mode = plMode();
-$pl   = ($mode === 'fifo') ? _calcFifo($allTxAsc, $price) : _calcAvg($allTxAsc, $price);
+$pl   = ($mode === 'fifo') ? _calcFifo($allTxAsc, 0) : _calcAvg($allTxAsc, 0);
 
 $holdings     = $pl['holdings'];
 $avgBuy       = $pl['avg_buy'];
 $costBasis    = $pl['cost_basis'];
-$currentValue = $pl['current_value'];
+$currentValue = 0;
 $realizedPL   = $pl['realized_pl'];
-$unrealizedPL = $pl['unrealized_pl'];
-$totalPL      = $pl['total_pl'];
+$unrealizedPL = 0;
+$totalPL      = $realizedPL;
 $totalSpent   = $pl['total_spent'];
 $plTimeline   = $pl['timeline'];
 
-$plPercent    = ($costBasis > 0) ? (($unrealizedPL / $costBasis) * 100) : 0;
-$totalPercent = ($totalSpent > 0) ? (($totalPL / $totalSpent) * 100) : 0;
+$plPercent    = 0;
+$totalPercent = 0;
 
 $lastCumRealized = !empty($plTimeline) ? end($plTimeline)['cum_realized'] : 0;
+$lastEntry       = !empty($plTimeline) ? end($plTimeline) : null;
 
 $graphPoints = array_map(fn($p) => [
     'date'         => $p['date'],
@@ -57,8 +48,8 @@ $graphPoints = array_map(fn($p) => [
 
 $graphPoints[] = [
     'date'         => date('Y-m-d H:i:s'),
-    'total_pl'     => $totalPL,
-    'unrealized'   => $unrealizedPL,
+    'total_pl'     => $lastEntry ? $lastEntry['total_pl'] : 0,
+    'unrealized'   => $lastEntry ? $lastEntry['unrealized'] : 0,
     'cum_realized' => $lastCumRealized,
     'is_now'       => true,
 ];
@@ -83,19 +74,20 @@ layoutNav($user);
           data-precision="<?= precision() ?>"
           data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
           data-pl-timeline="<?= e(json_encode($plTimeline)) ?>"
-          data-transactions="<?= e(json_encode($allTxAsc)) ?>">
+          data-transactions="<?= e(json_encode($allTxAsc)) ?>"
+          data-deferred-prices="1">
         <a href="index.php" class="back-link">&larr; Back to Dashboard</a>
 
         <section class="token-header">
             <div>
                 <h1>
-                    <?php if ($rank > 0): ?><span class="rank-badge">#<?= $rank ?></span><?php endif; ?>
+                    <span class="rank-badge" data-live="rank" style="display:none"></span>
                     <?= e($token['name']) ?>
                     <span class="symbol-badge"><?= e($token['symbol']) ?></span>
                 </h1>
                 <p class="live-price">
-                    Current Price: <strong data-live="price"><?= formatUSD($price) ?></strong>
-                    <span class="price-badge <?= plClass($change24) ?>" data-live="change24"><?= formatPercent($change24) ?></span>
+                    Current Price: <strong data-live="price"><span class="loading-skeleton loading-inline">&mdash;</span></strong>
+                    <span class="price-badge" data-live="change24"><span class="loading-skeleton loading-inline">&mdash;</span></span>
                 </p>
             </div>
         </section>
@@ -112,17 +104,17 @@ layoutNav($user);
             </div>
             <div class="pl-card">
                 <h3>Unrealized P/L</h3>
-                <p class="pl-value <?= plClass($unrealizedPL) ?>" data-countup="<?= $unrealizedPL ?>" data-pl="1" data-live="unrealizedPL">
-                    <?= formatPL($unrealizedPL) ?>
-                    <span class="pl-percent" data-live="unrealizedPercent">(<?= formatPercent($plPercent) ?>)</span>
+                <p class="pl-value" data-live="unrealizedPL">
+                    <span class="loading-skeleton loading-inline">&mdash;</span>
+                    <span class="pl-percent" data-live="unrealizedPercent"></span>
                 </p>
                 <small>If you sell <?= formatCrypto($holdings) ?> <?= e($token['symbol']) ?> now</small>
             </div>
             <div class="pl-card highlight">
                 <h3>Total P/L</h3>
-                <p class="pl-value <?= plClass($totalPL) ?>" data-countup="<?= $totalPL ?>" data-pl="1" data-live="totalPL">
-                    <?= formatPL($totalPL) ?>
-                    <span class="pl-percent" data-live="totalPercent">(<?= formatPercent($totalPercent) ?>)</span>
+                <p class="pl-value" data-live="totalPL">
+                    <span class="loading-skeleton loading-inline">&mdash;</span>
+                    <span class="pl-percent" data-live="totalPercent"></span>
                 </p>
                 <small>Realized + Unrealized</small>
             </div>
@@ -133,7 +125,7 @@ layoutNav($user);
                 <div><span class="label">Holdings</span><span class="val"><?= formatCrypto($holdings) ?> <?= e($token['symbol']) ?></span></div>
                 <div><span class="label">Avg Buy Price</span><span class="val"><?= formatUSD($avgBuy) ?></span></div>
                 <div><span class="label">Cost Basis</span><span class="val"><?= formatUSD($costBasis) ?></span></div>
-                <div><span class="label">Current Value</span><span class="val" data-live="currentVal"><?= formatUSD($currentValue) ?></span></div>
+                <div><span class="label">Current Value</span><span class="val" data-live="currentVal"><span class="loading-skeleton loading-inline">&mdash;</span></span></div>
             </div>
         </section>
 
@@ -142,40 +134,36 @@ layoutNav($user);
             <div class="market-grid">
                 <div class="market-item">
                     <span class="label">1h Change</span>
-                    <span class="val <?= plClass($change1h) ?>" data-live-market="change1h"><?= formatPercent($change1h) ?></span>
+                    <span class="val" data-live-market="change1h"><span class="loading-skeleton loading-inline">&mdash;</span></span>
                 </div>
                 <div class="market-item">
                     <span class="label">24h Change</span>
-                    <span class="val <?= plClass($change24) ?>" data-live-market="change24"><?= formatPercent($change24) ?></span>
+                    <span class="val" data-live-market="change24"><span class="loading-skeleton loading-inline">&mdash;</span></span>
                 </div>
                 <div class="market-item">
                     <span class="label">7d Change</span>
-                    <span class="val <?= plClass($change7d) ?>" data-live-market="change7d"><?= formatPercent($change7d) ?></span>
+                    <span class="val" data-live-market="change7d"><span class="loading-skeleton loading-inline">&mdash;</span></span>
                 </div>
                 <div class="market-item">
                     <span class="label">Market Cap</span>
-                    <span class="val" data-live-market="marketCap"><?= formatBigNum($marketCap) ?></span>
+                    <span class="val" data-live-market="marketCap"><span class="loading-skeleton loading-inline">&mdash;</span></span>
                 </div>
                 <div class="market-item">
                     <span class="label">24h Volume</span>
-                    <span class="val" data-live-market="volume24"><?= formatBigNum($volume24) ?></span>
+                    <span class="val" data-live-market="volume24"><span class="loading-skeleton loading-inline">&mdash;</span></span>
                 </div>
-                <div class="market-item">
+                <div class="market-item" data-live-market-parent="csupply">
                     <span class="label">Circulating Supply</span>
-                    <span class="val"><?= formatSupply($csupply) ?> <?= e($token['symbol']) ?></span>
+                    <span class="val" data-live-market="csupply"><span class="loading-skeleton loading-inline">&mdash;</span></span>
                 </div>
-                <?php if ($tsupply > 0): ?>
-                <div class="market-item">
+                <div class="market-item" data-live-market-parent="tsupply" style="display:none">
                     <span class="label">Total Supply</span>
-                    <span class="val"><?= formatSupply($tsupply) ?> <?= e($token['symbol']) ?></span>
+                    <span class="val" data-live-market="tsupply"></span>
                 </div>
-                <?php endif; ?>
-                <?php if ($msupply > 0): ?>
-                <div class="market-item">
+                <div class="market-item" data-live-market-parent="msupply" style="display:none">
                     <span class="label">Max Supply</span>
-                    <span class="val"><?= formatSupply($msupply) ?> <?= e($token['symbol']) ?></span>
+                    <span class="val" data-live-market="msupply"></span>
                 </div>
-                <?php endif; ?>
             </div>
         </section>
 
@@ -192,7 +180,7 @@ layoutNav($user);
 
                     <label>Price per unit (USD)</label>
                     <input type="number" name="price_per_unit" step="any" min="0.00000001" required
-                           value="<?= formatFormValue($price) ?>" placeholder="0.00" id="buyPrice">
+                           value="" placeholder="Loading price…" id="buyPrice">
 
                     <div class="future-preview" id="buyPreview" style="display:none;">
                         <div class="future-preview-label">After this buy:</div>
@@ -227,7 +215,7 @@ layoutNav($user);
 
                     <label>Price per unit (USD)</label>
                     <input type="number" name="price_per_unit" step="any" min="0.00000001" required
-                           value="<?= formatFormValue($price) ?>" placeholder="0.00" id="sellPrice">
+                           value="" placeholder="Loading price…" id="sellPrice">
 
                     <div class="future-preview" id="sellPreview" style="display:none;">
                         <div class="future-preview-label">After this sell:</div>
@@ -305,14 +293,14 @@ layoutNav($user);
                             data-cum-realized="<?= $lastCumRealized ?>">
                             <td data-live-now="date"><?= date('M d, Y H:i') ?></td>
                             <td><span class="badge badge-now">Now</span></td>
-                            <td data-live-now="price"><?= formatUSD($price) ?></td>
-                            <td data-live-now="holdingVal"><?= formatUSD($currentValue) ?></td>
+                            <td data-live-now="price"><span class="loading-skeleton loading-inline">&mdash;</span></td>
+                            <td data-live-now="holdingVal"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td><?= formatCrypto($holdings) ?></td>
                             <td><?= formatUSD($avgBuy) ?></td>
                             <td>–</td>
                             <td class="<?= plClass($lastCumRealized) ?>"><?= formatPL($lastCumRealized) ?></td>
-                            <td class="<?= plClass($unrealizedPL) ?>" data-live-now="unrealized"><?= formatPL($unrealizedPL) ?></td>
-                            <td class="<?= plClass($totalPL) ?>" data-live-now="totalPL"><?= formatPL($totalPL) ?></td>
+                            <td data-live-now="unrealized"><span class="loading-skeleton loading-inline">&mdash;</span></td>
+                            <td data-live-now="totalPL"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                         </tr>
                     </tbody>
                 </table>

@@ -243,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function flashEl(el) {
+        if (main && main.hasAttribute('data-deferred-prices')) return;
         el.classList.add('live-flash');
         setTimeout(() => el.classList.remove('live-flash'), 600);
     }
@@ -344,6 +345,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return trimZerosJS('$' + v.toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p }));
     }
 
+    function formatSupplyJS(v) {
+        if (v <= 0) return '\u2014';
+        const p = getPrec();
+        if (v >= 1e12) return trimZerosJS((v / 1e12).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + 'T';
+        if (v >= 1e9)  return trimZerosJS((v / 1e9).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + 'B';
+        if (v >= 1e6)  return trimZerosJS((v / 1e6).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + 'M';
+        if (v >= 1e3)  return trimZerosJS((v / 1e3).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + 'K';
+        return v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    }
+
     function updateDashboard(quotes) {
         const tblDec = getPrec();
 
@@ -422,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dec = getPrec();
 
         const realizedEl = document.querySelector('.pl-card:first-child .pl-value');
-        const realVal = realizedEl ? parsePLText(realizedEl.textContent) : 0;
+        const realVal = parseFloat(main.dataset.realizedPl) || 0;
         const newTotal = realVal + newUnreal;
         const unrealPct = costBasis > 0 ? (newUnreal / costBasis) * 100 : 0;
         const totalSpent = costBasis;
@@ -494,6 +505,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 mVolume24.textContent = formatBigNumJS(q.volume_24h);
                 flashEl(mVolume24);
             }
+
+            // Update rank badge
+            const rankBadge = document.querySelector('[data-live="rank"]');
+            if (rankBadge && q.rank > 0) {
+                rankBadge.textContent = '#' + q.rank;
+                rankBadge.style.display = '';
+            }
+
+            // Update supply data
+            const sym = main.dataset.symbol || '';
+            const supplyFields = [
+                { key: 'csupply', attr: 'csupply' },
+                { key: 'tsupply', attr: 'tsupply' },
+                { key: 'msupply', attr: 'msupply' },
+            ];
+            supplyFields.forEach(({ key, attr }) => {
+                const el = document.querySelector('[data-live-market="' + attr + '"]');
+                const parent = document.querySelector('[data-live-market-parent="' + attr + '"]');
+                const val = q[key] || 0;
+                if (el) {
+                    el.textContent = val > 0 ? formatSupplyJS(val) + ' ' + sym : '\u2014';
+                    flashEl(el);
+                }
+                if (parent) {
+                    parent.style.display = val > 0 ? '' : 'none';
+                }
+            });
         } catch (e) { console.error('[CrypTracker] market data update error:', e); }
 
         // Update "Now" row in analytics table
@@ -537,22 +575,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ── Auto-update form "Price per unit" inputs ──
         // Only when user isn't actively filling the form (Amount field is empty).
+        // On deferred first load, always set the price.
         try {
             const buyAmtInput  = document.getElementById('buyAmount');
             const buyPrcInput  = document.getElementById('buyPrice');
             const sellAmtInput = document.getElementById('sellAmount');
             const sellPrcInput = document.getElementById('sellPrice');
+            const isFirstLoad  = main.hasAttribute('data-deferred-prices');
 
             if (buyAmtInput && buyPrcInput) {
                 const buyAmtVal = parseFloat(buyAmtInput.value) || 0;
-                if (buyAmtVal === 0) {
+                if (buyAmtVal === 0 || isFirstLoad) {
                     buyPrcInput.value = newPrice;
+                    buyPrcInput.placeholder = '0.00';
                 }
             }
             if (sellAmtInput && sellPrcInput) {
                 const sellAmtVal = parseFloat(sellAmtInput.value) || 0;
-                if (sellAmtVal === 0) {
+                if (sellAmtVal === 0 || isFirstLoad) {
                     sellPrcInput.value = newPrice;
+                    sellPrcInput.placeholder = '0.00';
                 }
             }
         } catch (e) { console.error('[CrypTracker] form auto-update error:', e); }
@@ -604,6 +646,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (page === 'dashboard') updateDashboard(quotes);
             if (page === 'token') updateTokenPage(quotes);
+
+            // Remove deferred-prices flag after first successful load
+            if (main.hasAttribute('data-deferred-prices')) {
+                main.removeAttribute('data-deferred-prices');
+            }
         } catch (e) {
             console.error('[CrypTracker] refreshPrices error:', e);
         } finally {

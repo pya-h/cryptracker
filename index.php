@@ -4,46 +4,31 @@
  */
 
 require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/api.php';
 require_once __DIR__ . '/includes/helpers.php';
 
 $user = requireAuth();
 $tokens = dbGetUserTokens($user['id']);
-$cmcIds = array_column($tokens, 'cmc_id');
-$quotes = $cmcIds ? apiGetQuotes($cmcIds) : [];
 $mode = plMode();
 $summaries     = [];
 $totalRealPL   = 0;
-$totalUnrealPL = 0;
 $totalInvested = 0;
 
+/* Prices loaded asynchronously via JS — page renders instantly */
 foreach ($tokens as $tk) {
-    $id       = $tk['id'];
-    $cmcId    = $tk['cmc_id'];
-    $price    = $quotes[$cmcId]['price'] ?? 0;
-    $change24 = $quotes[$cmcId]['percent_change_24h'] ?? 0;
-
-    $pl = calcTokenPL($id, $price, $mode);
+    $id = $tk['id'];
+    $pl = calcTokenPL($id, 0, $mode);
 
     $summaries[] = [
         'token'       => $tk,
-        'price'       => $price,
-        'change24'    => $change24,
         'holdings'    => $pl['holdings'],
         'avgBuy'      => $pl['avg_buy'],
         'invested'    => $pl['cost_basis'],
-        'currentVal'  => $pl['current_value'],
         'realizedPL'  => $pl['realized_pl'],
-        'unrealizedPL'=> $pl['unrealized_pl'],
-        'totalPL'     => $pl['total_pl'],
     ];
 
     $totalRealPL   += $pl['realized_pl'];
-    $totalUnrealPL += $pl['unrealized_pl'];
     $totalInvested += $pl['cost_basis'];
 }
-
-$totalPL = $totalRealPL + $totalUnrealPL;
 
 layoutHead('Dashboard');
 layoutNav($user);
@@ -51,7 +36,8 @@ layoutNav($user);
 
     <main class="container" data-page="dashboard"
           data-precision="<?= precision() ?>"
-          data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>">
+          data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
+          data-deferred-prices="1">
 
         <?= renderFlashes() ?>
 
@@ -68,14 +54,14 @@ layoutNav($user);
             </div>
             <div class="summary-card stagger-3">
                 <span class="summary-label">Unrealized P/L</span>
-                <span class="summary-value <?= plClass($totalUnrealPL) ?>" data-countup="<?= $totalUnrealPL ?>" data-pl="1" data-live="unrealized-total">
-                    <?= formatPL($totalUnrealPL) ?>
+                <span class="summary-value" data-live="unrealized-total">
+                    <span class="loading-skeleton loading-inline">&mdash;</span>
                 </span>
             </div>
             <div class="summary-card highlight stagger-4">
                 <span class="summary-label">Total P/L</span>
-                <span class="summary-value <?= plClass($totalPL) ?>" data-countup="<?= $totalPL ?>" data-pl="1" data-live="total-pl-total">
-                    <?= formatPL($totalPL) ?>
+                <span class="summary-value" data-live="total-pl-total">
+                    <span class="loading-skeleton loading-inline">&mdash;</span>
                 </span>
             </div>
         </section>
@@ -118,22 +104,16 @@ layoutNav($user);
                                 <strong><?= e($s['token']['symbol']) ?></strong>
                                 <small><?= e($s['token']['name']) ?></small>
                             </td>
-                            <td data-live="price"><?= formatUSD($s['price']) ?></td>
-                            <td class="<?= plClass($s['change24']) ?>" data-live="change24">
-                                <?= formatPercent($s['change24']) ?>
-                            </td>
+                            <td data-live="price"><span class="loading-skeleton loading-inline">&mdash;</span></td>
+                            <td data-live="change24"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td><?= formatCrypto($s['holdings']) ?></td>
                             <td><?= formatUSD($s['avgBuy']) ?></td>
-                            <td data-live="currentVal"><?= formatUSD($s['currentVal']) ?></td>
+                            <td data-live="currentVal"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td class="<?= plClass($s['realizedPL']) ?>">
                                 <?= formatPL($s['realizedPL']) ?>
                             </td>
-                            <td class="<?= plClass($s['unrealizedPL']) ?>" data-live="unrealizedPL">
-                                <?= formatPL($s['unrealizedPL']) ?>
-                            </td>
-                            <td class="<?= plClass($s['totalPL']) ?>" data-live="totalPL">
-                                <?= formatPL($s['totalPL']) ?>
-                            </td>
+                            <td data-live="unrealizedPL"><span class="loading-skeleton loading-inline">&mdash;</span></td>
+                            <td data-live="totalPL"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
