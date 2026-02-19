@@ -954,6 +954,9 @@ form .btn { margin-top: 1.2rem; }
 .future-row:hover { opacity: 0.8; }
 .future-row td { font-style: italic; font-size: .82em; }
 
+.future-invalid-row td { color: var(--text-muted) !important; }
+.future-invalid { color: var(--text-muted) !important; font-weight: 400 !important; }
+
 .badge-future-buy {
     background: rgba(0, 184, 148, .10);
     color: rgba(0, 184, 148, .7);
@@ -1091,6 +1094,47 @@ form .btn { margin-top: 1.2rem; }
 .graph-container canvas {
     display: block;
     width: 100%;
+}
+
+/* ── Graph Legend (interactive) ───────────────────────────── */
+
+.graph-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem .9rem;
+    padding: .5rem .3rem 0;
+    justify-content: center;
+}
+
+.graph-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--text-muted, #9ca3b8);
+    cursor: pointer;
+    padding: .2rem .5rem;
+    border-radius: 4px;
+    user-select: none;
+    transition: opacity .2s ease, background .15s ease;
+}
+
+.graph-legend-item:hover {
+    background: rgba(162, 155, 254, .08);
+}
+
+.graph-legend-item.disabled {
+    opacity: .35;
+    text-decoration: line-through;
+}
+
+.graph-legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
 }
 
 .analytics-table th,

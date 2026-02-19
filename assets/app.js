@@ -298,17 +298,36 @@ document.addEventListener('DOMContentLoaded', () => {
     function plClassJS(v) { return v >= 0 ? 'profit' : 'loss'; }
 
     function formatUSD(v, dec) {
-        return '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+        const raw = '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+        return trimZerosJS(raw);
     }
 
     function formatPLJS(v, dec) {
         const abs = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-        return (v >= 0 ? '+$' : '-$') + abs;
+        return trimZerosJS((v >= 0 ? '+$' : '-$') + abs);
     }
 
     function formatPercentJS(v, dec) {
         const sign = v >= 0 ? '+' : '';
-        return sign + v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + '%';
+        return trimZerosJS(sign + v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })) + '%';
+    }
+
+    function trimZerosJS(s) {
+        if (!main || main.dataset.worthlessZeros === '1') return s;
+        return s.replace(/\d+\.\d+/g, m => {
+            let t = m.replace(/0+$/, '');
+            if (t.endsWith('.')) t = t.slice(0, -1);
+            return t;
+        });
+    }
+
+    function formatCryptoJS(v) {
+        const dec = parseInt(main.dataset.precision) || 2;
+        const maxDec = Math.max(dec, 8);
+        let s = v.toFixed(maxDec);
+        s = s.replace(/0+$/, '');
+        if (s.endsWith('.')) s = s.slice(0, -1);
+        return s;
     }
 
     function updateDashboard(quotes) {
@@ -409,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalEl = document.querySelector('[data-live="totalPL"]');
         const totalPctEl = document.querySelector('[data-live="totalPercent"]');
 
-        if (priceEl) { priceEl.textContent = '$' + newPrice.toFixed(6); flashEl(priceEl); }
+        if (priceEl) { priceEl.textContent = trimZerosJS('$' + newPrice.toFixed(6)); flashEl(priceEl); }
 
         // Keep the current price data attribute updated for future calculations
         main.dataset.currentPrice = newPrice;
@@ -451,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const nTotal = nowRow.querySelector('[data-live-now="totalPL"]');
 
             if (nDate) nDate.textContent = dateStr;
-            if (nPrice) { nPrice.textContent = '$' + newPrice.toFixed(6); flashEl(nPrice); }
+            if (nPrice) { nPrice.textContent = trimZerosJS('$' + newPrice.toFixed(6)); flashEl(nPrice); }
             if (nHoldVal) { nHoldVal.textContent = formatUSD(newCurrVal, dec); flashEl(nHoldVal); }
             if (nUnreal) {
                 nUnreal.textContent = formatPLJS(newUnreal, dec);
@@ -475,6 +494,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 nowPoint.total_pl = Math.round(newTotal * 100) / 100;
                 nowPoint.unrealized = Math.round(newUnreal * 100) / 100;
             }
+            // Don't redraw here — future previews will redraw with updated price
+        }
+
+        // Recalculate future previews with the new price
+        if (window._updateFuturePreviews) {
+            window._updateFuturePreviews();
+        } else if (window._drawPLGraph) {
             window._drawPLGraph();
         }
     }
@@ -633,13 +659,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const plMode     = main.dataset.plMode || 'fifo';
             const symbol     = main.dataset.symbol || '???';
             const rawTxs     = JSON.parse(main.dataset.transactions || '[]');
+            const prec       = parseInt(main.dataset.precision) || 2;
 
-            // Track the order futures were created
-            // Each entry: { type: 'buy'|'sell', order: number }
-            let futureSequence = []; // ordered list of active future types
-            let buyInputOrder  = 0;   // sequence counter when buy amount first entered
-            let sellInputOrder = 0;   // sequence counter when sell amount first entered
-            let sequenceCounter = 0;
+            let futureSequence = [];
 
             function getBuyAmount()  { return parseFloat(buyAmountInput.value) || 0; }
             function getBuyPrice()   { return parseFloat(buyPriceInput.value) || 0; }
@@ -772,8 +794,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const baseTxs = normalizeTxs(rawTxs);
 
+            // Compute base holdings for sell validation
+            function getBaseHoldings() {
+                return parseFloat(main.dataset.holdings) || 0;
+            }
+
+            // Returns available holdings after processing future sequence up to (but not including) the given type
+            // If a buy comes before a sell in the sequence, it adds to available holdings
+            function getAvailableHoldingsForSell() {
+                let avail = getBaseHoldings();
+                for (const ft of futureSequence) {
+                    if (ft === 'sell') break; // stop before this sell
+                    if (ft === 'buy') {
+                        const amt = getBuyAmount();
+                        if (amt > 0) avail += amt;
+                    }
+                }
+                return avail;
+            }
+
             function buildFutureTxList() {
                 const futureTxs = [];
+                let runHoldings = getBaseHoldings();
 
                 for (const ft of futureSequence) {
                     if (ft === 'buy') {
@@ -784,19 +826,22 @@ document.addEventListener('DOMContentLoaded', () => {
                                 type: 'buy', amount: amt, price_per_unit: ppu,
                                 total_value: amt * ppu, realized_pl: 0,
                                 created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                                is_future: true, future_type: 'buy',
+                                is_future: true, future_type: 'buy', invalid: false,
                             });
+                            runHoldings += amt;
                         }
                     } else {
                         const amt = getSellAmount();
                         const ppu = getSellPrice();
                         if (amt > 0 && ppu > 0) {
+                            const invalid = amt > runHoldings + 1e-10;
                             futureTxs.push({
                                 type: 'sell', amount: amt, price_per_unit: ppu,
                                 total_value: amt * ppu, realized_pl: 0,
                                 created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                                is_future: true, future_type: 'sell',
+                                is_future: true, future_type: 'sell', invalid: invalid,
                             });
+                            if (!invalid) runHoldings -= amt;
                         }
                     }
                 }
@@ -817,11 +862,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Base state (no futures)
                 const baseResult = calcPL(baseTxs, currentPrice);
 
+                // Check sell validity
+                const availHoldings = getAvailableHoldingsForSell();
+                const sellInvalid = sellAmt > availHoldings + 1e-10;
+
                 // ── Buy preview ──
                 if (buyAmt > 0 && buyPpu > 0) {
-                    // Calculate state after all futures up to and including this buy
                     const txsWithBuy = [...baseTxs];
-                    // Add all futures before this buy in sequence
                     for (const ft of futureSequence) {
                         if (ft === 'buy') {
                             txsWithBuy.push({
@@ -829,8 +876,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 total_value: buyAmt * buyPpu, realized_pl: 0,
                                 created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
                             });
-                            break; // Stop at this buy
-                        } else if (ft === 'sell' && sellAmt > 0 && sellPpu > 0) {
+                            break;
+                        } else if (ft === 'sell' && sellAmt > 0 && sellPpu > 0 && !sellInvalid) {
                             txsWithBuy.push({
                                 type: 'sell', amount: sellAmt, price_per_unit: sellPpu,
                                 total_value: sellAmt * sellPpu, realized_pl: 0,
@@ -841,44 +888,54 @@ document.addEventListener('DOMContentLoaded', () => {
                     const afterBuy = calcPL(txsWithBuy, currentPrice);
 
                     buyPreview.style.display = '';
-                    document.getElementById('buyPreviewUnrealized').textContent = formatPLJS(afterBuy.unrealized_pl, 2);
+                    document.getElementById('buyPreviewUnrealized').textContent = formatPLJS(afterBuy.unrealized_pl, prec);
                     document.getElementById('buyPreviewUnrealized').className = 'val ' + plClassJS(afterBuy.unrealized_pl);
-                    document.getElementById('buyPreviewHoldings').textContent = afterBuy.holdings.toFixed(6) + ' ' + symbol;
-                    document.getElementById('buyPreviewAvgCost').textContent = '$' + afterBuy.avg_buy.toFixed(6);
+                    document.getElementById('buyPreviewHoldings').textContent = formatCryptoJS(afterBuy.holdings) + ' ' + symbol;
+                    document.getElementById('buyPreviewAvgCost').textContent = trimZerosJS('$' + afterBuy.avg_buy.toFixed(6));
                 } else {
                     buyPreview.style.display = 'none';
                 }
 
                 // ── Sell preview ──
                 if (sellAmt > 0 && sellPpu > 0) {
-                    // Calculate state after all futures up to and including this sell
-                    const txsWithSell = [...baseTxs];
-                    for (const ft of futureSequence) {
-                        if (ft === 'sell') {
-                            txsWithSell.push({
-                                type: 'sell', amount: sellAmt, price_per_unit: sellPpu,
-                                total_value: sellAmt * sellPpu, realized_pl: 0,
-                                created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                            });
-                            break;
-                        } else if (ft === 'buy' && buyAmt > 0 && buyPpu > 0) {
-                            txsWithSell.push({
-                                type: 'buy', amount: buyAmt, price_per_unit: buyPpu,
-                                total_value: buyAmt * buyPpu, realized_pl: 0,
-                                created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                            });
-                        }
-                    }
-                    const afterSell = calcPL(txsWithSell, currentPrice);
-
-                    const sellRealizedDelta = afterSell.realized_pl - baseResult.realized_pl;
-
                     sellPreview.style.display = '';
-                    document.getElementById('sellPreviewRealized').textContent = formatPLJS(sellRealizedDelta, 2);
-                    document.getElementById('sellPreviewRealized').className = 'val ' + plClassJS(sellRealizedDelta);
-                    document.getElementById('sellPreviewHoldings').textContent = afterSell.holdings.toFixed(6) + ' ' + symbol;
-                    document.getElementById('sellPreviewCumRealized').textContent = formatPLJS(afterSell.realized_pl, 2);
-                    document.getElementById('sellPreviewCumRealized').className = 'val ' + plClassJS(afterSell.realized_pl);
+
+                    if (sellInvalid) {
+                        // Show '?' for all values when sell exceeds holdings
+                        document.getElementById('sellPreviewRealized').textContent = '?';
+                        document.getElementById('sellPreviewRealized').className = 'val future-invalid';
+                        document.getElementById('sellPreviewHoldings').textContent = '?';
+                        document.getElementById('sellPreviewHoldings').className = 'val future-invalid';
+                        document.getElementById('sellPreviewCumRealized').textContent = '?';
+                        document.getElementById('sellPreviewCumRealized').className = 'val future-invalid';
+                    } else {
+                        const txsWithSell = [...baseTxs];
+                        for (const ft of futureSequence) {
+                            if (ft === 'sell') {
+                                txsWithSell.push({
+                                    type: 'sell', amount: sellAmt, price_per_unit: sellPpu,
+                                    total_value: sellAmt * sellPpu, realized_pl: 0,
+                                    created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                                });
+                                break;
+                            } else if (ft === 'buy' && buyAmt > 0 && buyPpu > 0) {
+                                txsWithSell.push({
+                                    type: 'buy', amount: buyAmt, price_per_unit: buyPpu,
+                                    total_value: buyAmt * buyPpu, realized_pl: 0,
+                                    created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                                });
+                            }
+                        }
+                        const afterSell = calcPL(txsWithSell, currentPrice);
+                        const sellRealizedDelta = afterSell.realized_pl - baseResult.realized_pl;
+
+                        document.getElementById('sellPreviewRealized').textContent = formatPLJS(sellRealizedDelta, prec);
+                        document.getElementById('sellPreviewRealized').className = 'val ' + plClassJS(sellRealizedDelta);
+                        document.getElementById('sellPreviewHoldings').textContent = formatCryptoJS(afterSell.holdings) + ' ' + symbol;
+                        document.getElementById('sellPreviewHoldings').className = 'val';
+                        document.getElementById('sellPreviewCumRealized').textContent = formatPLJS(afterSell.realized_pl, prec);
+                        document.getElementById('sellPreviewCumRealized').className = 'val ' + plClassJS(afterSell.realized_pl);
+                    }
                 } else {
                     sellPreview.style.display = 'none';
                 }
@@ -904,12 +961,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Calculate the full state with all future transactions
-                const allTxs = [...baseTxs, ...futureTxs];
+                // Build only valid future txs for calculation (skip invalid sells)
+                const validFutureTxs = futureTxs.filter(ft => !ft.invalid);
+                const allTxs = [...baseTxs, ...validFutureTxs];
                 const fullResult = calcPL(allTxs, currentPrice);
                 const fullTimeline = fullResult.timeline;
-
-                // The future entries are the last N entries in the timeline
                 const futureTimelineEntries = fullTimeline.slice(baseTxs.length);
 
                 // Insert future rows into the analytics table after the Now row
@@ -918,34 +974,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (tableBody && nowRow) {
                     let insertAfter = nowRow;
+                    let validIdx = 0;
 
-                    futureTimelineEntries.forEach((entry, idx) => {
+                    futureTxs.forEach((ftx) => {
                         const tr = document.createElement('tr');
                         tr.className = 'future-row';
-                        const futureLabel = futureTxs[idx].future_type === 'buy' ? 'Future Buy' : 'Future Sell';
-                        const badgeClass = futureTxs[idx].future_type === 'buy' ? 'badge-future-buy' : 'badge-future-sell';
+                        const futureLabel = ftx.future_type === 'buy' ? 'Future Buy' : 'Future Sell';
+                        const badgeClass = ftx.future_type === 'buy' ? 'badge-future-buy' : 'badge-future-sell';
 
-                        tr.innerHTML =
-                            '<td>' + futureLabel + '</td>' +
-                            '<td><span class="badge ' + badgeClass + '">'
-                                + (futureTxs[idx].future_type === 'buy' ? '+' : '-')
-                                + entry.amount.toFixed(6) + '</span></td>' +
-                            '<td>$' + entry.ppu.toFixed(6) + '</td>' +
-                            '<td>' + formatUSD(entry.total, 2) + '</td>' +
-                            '<td>' + entry.holdings.toFixed(6) + '</td>' +
-                            '<td>$' + entry.avg_cost.toFixed(6) + '</td>' +
-                            '<td class="' + plClassJS(entry.realized) + '">'
-                                + (entry.type === 'sell' ? formatPLJS(entry.realized, 2) : '\u2013') + '</td>' +
-                            '<td class="' + plClassJS(entry.cum_realized) + '">' + formatPLJS(entry.cum_realized, 2) + '</td>' +
-                            '<td class="' + plClassJS(entry.unrealized) + '">' + formatPLJS(entry.unrealized, 2) + '</td>' +
-                            '<td class="' + plClassJS(entry.total_pl) + '">' + formatPLJS(entry.total_pl, 2) + '</td>';
+                        if (ftx.invalid) {
+                            // Invalid sell — show '?' for computed columns
+                            tr.classList.add('future-invalid-row');
+                            tr.innerHTML =
+                                '<td>' + futureLabel + '</td>' +
+                                '<td><span class="badge ' + badgeClass + '">' +
+                                    '-' + formatCryptoJS(ftx.amount) + '</span></td>' +
+                                '<td>' + trimZerosJS('$' + ftx.price_per_unit.toFixed(6)) + '</td>' +
+                                '<td>' + formatUSD(ftx.total_value, prec) + '</td>' +
+                                '<td>?</td><td>?</td><td>?</td><td>?</td><td>?</td><td>?</td>';
+                        } else {
+                            const entry = futureTimelineEntries[validIdx++];
+                            tr.innerHTML =
+                                '<td>' + futureLabel + '</td>' +
+                                '<td><span class="badge ' + badgeClass + '">'
+                                    + (ftx.future_type === 'buy' ? '+' : '-')
+                                    + formatCryptoJS(entry.amount) + '</span></td>' +
+                                '<td>' + trimZerosJS('$' + entry.ppu.toFixed(6)) + '</td>' +
+                                '<td>' + formatUSD(entry.total, prec) + '</td>' +
+                                '<td>' + formatCryptoJS(entry.holdings) + '</td>' +
+                                '<td>' + trimZerosJS('$' + entry.avg_cost.toFixed(6)) + '</td>' +
+                                '<td class="' + plClassJS(entry.realized) + '">'
+                                    + (entry.type === 'sell' ? formatPLJS(entry.realized, prec) : '\u2013') + '</td>' +
+                                '<td class="' + plClassJS(entry.cum_realized) + '">' + formatPLJS(entry.cum_realized, prec) + '</td>' +
+                                '<td class="' + plClassJS(entry.unrealized) + '">' + formatPLJS(entry.unrealized, prec) + '</td>' +
+                                '<td class="' + plClassJS(entry.total_pl) + '">' + formatPLJS(entry.total_pl, prec) + '</td>';
+                        }
 
                         insertAfter.after(tr);
                         insertAfter = tr;
                     });
                 }
 
-                // Update graph data with future points
+                // Update graph data with valid future points only
                 if (window._plGraphData) {
                     futureTimelineEntries.forEach(entry => {
                         window._plGraphData.push({
@@ -962,16 +1032,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // ── Sequence management ───────────────────────────────
-            // Track the order that user enters values in forms
 
             function updateSequence(type, hasValue) {
                 if (hasValue) {
-                    // If this type is not in the sequence, add it
                     if (!futureSequence.includes(type)) {
                         futureSequence.push(type);
                     }
                 } else {
-                    // Remove this type from the sequence
                     futureSequence = futureSequence.filter(t => t !== type);
                 }
             }
@@ -994,6 +1061,9 @@ document.addEventListener('DOMContentLoaded', () => {
             buyPriceInput.addEventListener('input', onBuyInputChange);
             sellAmountInput.addEventListener('input', onSellInputChange);
             sellPriceInput.addEventListener('input', onSellInputChange);
+
+            // Expose for live price refresh
+            window._updateFuturePreviews = updateFuturePreviews;
         }
     }
 });

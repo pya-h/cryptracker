@@ -80,6 +80,8 @@ layoutNav($user);
           data-pl-mode="<?= e($mode) ?>"
           data-symbol="<?= e($token['symbol']) ?>"
           data-current-price="<?= $price ?>"
+          data-precision="<?= precision() ?>"
+          data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
           data-pl-timeline="<?= e(json_encode($plTimeline)) ?>"
           data-transactions="<?= e(json_encode($allTxAsc)) ?>">
         <a href="index.php" class="back-link">&larr; Back to Dashboard</a>
@@ -254,6 +256,7 @@ layoutNav($user);
 
             <div class="graph-container">
                 <canvas id="plGraph" width="800" height="280"></canvas>
+                <div id="graphLegend" class="graph-legend"></div>
             </div>
 
             <div class="table-responsive">
@@ -282,10 +285,10 @@ layoutNav($user);
                                     <?= $isBuy ? '+' : '-' ?><?= formatCrypto($row['amount']) ?>
                                 </span>
                             </td>
-                            <td>$<?= number_format($row['ppu'], 6) ?></td>
+                            <td><?= formatUSD($row['ppu']) ?></td>
                             <td><?= formatUSD($row['total']) ?></td>
                             <td><?= formatCrypto($row['holdings']) ?></td>
-                            <td>$<?= number_format($row['avg_cost'], 6) ?></td>
+                            <td><?= formatUSD($row['avg_cost']) ?></td>
                             <td class="<?= plClass($row['realized']) ?>">
                                 <?php if ($row['type'] === 'sell'): ?>
                                     <?= formatPL($row['realized']) ?>
@@ -305,10 +308,10 @@ layoutNav($user);
                             data-cum-realized="<?= $nowCumRealized ?>">
                             <td data-live-now="date"><?= date('M d, Y H:i') ?></td>
                             <td><span class="badge badge-now">Now</span></td>
-                            <td data-live-now="price">$<?= number_format($price, 6) ?></td>
+                            <td data-live-now="price"><?= formatUSD($price) ?></td>
                             <td data-live-now="holdingVal"><?= formatUSD($currentValue) ?></td>
                             <td><?= formatCrypto($holdings) ?></td>
-                            <td>$<?= number_format($avgBuy, 6) ?></td>
+                            <td><?= formatUSD($avgBuy) ?></td>
                             <td>–</td>
                             <td class="<?= plClass($nowCumRealized) ?>"><?= formatPL($nowCumRealized) ?></td>
                             <td class="<?= plClass($unrealizedPL) ?>" data-live-now="unrealized"><?= formatPL($unrealizedPL) ?></td>
@@ -354,7 +357,7 @@ layoutNav($user);
                             <td><?= date('M d, Y H:i', strtotime($tx['created_at'])) ?></td>
                             <td><span class="badge badge-<?= $tx['type'] ?>"><?= ucfirst($tx['type']) ?></span></td>
                             <td><?= formatCrypto($tx['amount']) ?></td>
-                            <td>$<?= number_format($tx['price_per_unit'], 6) ?></td>
+                            <td><?= formatUSD($tx['price_per_unit']) ?></td>
                             <td><?= formatUSD($tx['total_value']) ?></td>
                             <td class="<?= plClass($txPL) ?>">
                                 <?php if ($tx['type'] === 'sell'): ?>
@@ -383,6 +386,7 @@ layoutNav($user);
     <script>
     (function() {
         window._plGraphData = <?= $graphData ?>;
+        window._plHiddenSeries = new Set();
 
         const canvas = document.getElementById('plGraph');
         if (!canvas || !canvas.getContext || !window._plGraphData.length) return;
@@ -396,9 +400,39 @@ layoutNav($user);
             cumRealized: { line: '#00cec9', fill: 'rgba(0,206,201,0.08)', dot: '#00cec9' },
         };
 
+        const SERIES = [
+            { key: 'total_pl',     label: 'Total P/L',      color: COLORS.totalPL,     lineW: 2.5, dash: [] },
+            { key: 'unrealized',   label: 'Unrealized P/L', color: COLORS.unrealized,  lineW: 2,   dash: [3, 3] },
+            { key: 'cum_realized', label: 'Cum. Realized',  color: COLORS.cumRealized, lineW: 2,   dash: [6, 3] },
+        ];
+
+        // Build HTML legend
+        const legendContainer = document.getElementById('graphLegend');
+        if (legendContainer) {
+            SERIES.forEach(s => {
+                const item = document.createElement('span');
+                item.className = 'graph-legend-item';
+                item.dataset.series = s.key;
+                item.innerHTML = '<span class="graph-legend-swatch" style="background:' + s.color.line + '"></span>' + s.label;
+                item.addEventListener('click', () => {
+                    if (window._plHiddenSeries.has(s.key)) {
+                        window._plHiddenSeries.delete(s.key);
+                        item.classList.remove('disabled');
+                    } else {
+                        window._plHiddenSeries.add(s.key);
+                        item.classList.add('disabled');
+                    }
+                    window._drawPLGraph();
+                });
+                legendContainer.appendChild(item);
+            });
+        }
+
         window._drawPLGraph = function() {
             const data = window._plGraphData;
             if (!data.length) return;
+
+            const hidden = window._plHiddenSeries;
 
             const rect = canvas.parentElement.getBoundingClientRect();
             canvas.width  = rect.width * dpr;
@@ -409,13 +443,20 @@ layoutNav($user);
 
             const W = rect.width;
             const H = 320;
-            const pad = { top: 30, right: 20, bottom: 50, left: 65 };
+            const pad = { top: 30, right: 20, bottom: 32, left: 65 };
             const gW = W - pad.left - pad.right;
             const gH = H - pad.top - pad.bottom;
 
             ctx.clearRect(0, 0, W, H);
 
-            const allVals = data.flatMap(d => [d.total_pl, d.unrealized, d.cum_realized]);
+            // Compute value range only from visible series
+            const visibleKeys = SERIES.filter(s => !hidden.has(s.key)).map(s => s.key);
+            let allVals;
+            if (visibleKeys.length === 0) {
+                allVals = [0];
+            } else {
+                allVals = data.flatMap(d => visibleKeys.map(k => d[k]));
+            }
             let minV = Math.min(0, ...allVals);
             let maxV = Math.max(0, ...allVals);
             if (minV === maxV) { minV -= 10; maxV += 10; }
@@ -447,24 +488,29 @@ layoutNav($user);
                 ctx.setLineDash([]);
             }
 
-            const lastTotal = data[data.length - 1].total_pl;
-            const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + gH);
-            if (lastTotal >= 0) {
-                grad.addColorStop(0, 'rgba(108,92,231,0.18)');
-                grad.addColorStop(1, 'rgba(108,92,231,0.01)');
-            } else {
-                grad.addColorStop(0, 'rgba(108,92,231,0.01)');
-                grad.addColorStop(1, 'rgba(108,92,231,0.18)');
+            // Gradient fill for total_pl (only when visible)
+            if (!hidden.has('total_pl')) {
+                const lastTotal = data[data.length - 1].total_pl;
+                const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + gH);
+                if (lastTotal >= 0) {
+                    grad.addColorStop(0, 'rgba(108,92,231,0.18)');
+                    grad.addColorStop(1, 'rgba(108,92,231,0.01)');
+                } else {
+                    grad.addColorStop(0, 'rgba(108,92,231,0.01)');
+                    grad.addColorStop(1, 'rgba(108,92,231,0.18)');
+                }
+                ctx.beginPath();
+                ctx.moveTo(xPos(0), yPos(0));
+                for (let i = 0; i < data.length; i++) ctx.lineTo(xPos(i), yPos(data[i].total_pl));
+                ctx.lineTo(xPos(data.length - 1), yPos(0));
+                ctx.closePath();
+                ctx.fillStyle = grad;
+                ctx.fill();
             }
-            ctx.beginPath();
-            ctx.moveTo(xPos(0), yPos(0));
-            for (let i = 0; i < data.length; i++) ctx.lineTo(xPos(i), yPos(data[i].total_pl));
-            ctx.lineTo(xPos(data.length - 1), yPos(0));
-            ctx.closePath();
-            ctx.fillStyle = grad;
-            ctx.fill();
 
             function drawLine(key, color, lineW, dashPattern) {
+                if (hidden.has(key)) return;
+
                 // Find the boundary between real and future points
                 let lastRealIdx = data.length - 1;
                 for (let i = data.length - 1; i >= 0; i--) {
@@ -526,32 +572,32 @@ layoutNav($user);
                 });
             }
 
-            drawLine('cum_realized', COLORS.cumRealized, 2, [6, 3]);
-            drawLine('unrealized',   COLORS.unrealized,  2, [3, 3]);
-            drawLine('total_pl',     COLORS.totalPL,     2.5);
+            SERIES.forEach(s => drawLine(s.key, s.color, s.lineW, s.dash));
 
-            // "Now" label — find the Now point (may not be last anymore)
-            data.forEach((d, i) => {
-                if (d.is_now) {
-                    const nx = xPos(i);
-                    const ny = yPos(d.total_pl);
-                    ctx.fillStyle = '#6c5ce7';
-                    ctx.font = '600 10px Inter, sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('NOW', nx, ny - 10);
-                }
-                if (d.is_future) {
-                    const fx = xPos(i);
-                    const fy = yPos(d.total_pl);
-                    ctx.save();
-                    ctx.globalAlpha = 0.55;
-                    ctx.fillStyle = '#a29bfe';
-                    ctx.font = '600 9px Inter, sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('FUTURE', fx, fy - 10);
-                    ctx.restore();
-                }
-            });
+            // "Now" & "Future" labels — only if total_pl visible
+            if (!hidden.has('total_pl')) {
+                data.forEach((d, i) => {
+                    if (d.is_now) {
+                        const nx = xPos(i);
+                        const ny = yPos(d.total_pl);
+                        ctx.fillStyle = '#6c5ce7';
+                        ctx.font = '600 10px Inter, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('NOW', nx, ny - 10);
+                    }
+                    if (d.is_future) {
+                        const fx = xPos(i);
+                        const fy = yPos(d.total_pl);
+                        ctx.save();
+                        ctx.globalAlpha = 0.55;
+                        ctx.fillStyle = '#a29bfe';
+                        ctx.font = '600 9px Inter, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('FUTURE', fx, fy - 10);
+                        ctx.restore();
+                    }
+                });
+            }
 
             ctx.fillStyle = '#7c819a';
             ctx.font = '10px Inter, sans-serif';
@@ -580,24 +626,6 @@ layoutNav($user);
             ctx.font = '600 12px Inter, sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText('P/L Over Time', pad.left, 18);
-
-            const legendY = H - 10;
-            const legends = [
-                { label: 'Total P/L',       color: COLORS.totalPL.line },
-                { label: 'Unrealized P/L',  color: COLORS.unrealized.line },
-                { label: 'Cum. Realized',   color: COLORS.cumRealized.line },
-            ];
-            ctx.font = '11px Inter, sans-serif';
-            let lx = pad.left;
-            legends.forEach(lg => {
-                ctx.fillStyle = lg.color;
-                ctx.fillRect(lx, legendY - 8, 14, 3);
-                lx += 18;
-                ctx.fillStyle = '#9ca3b8';
-                ctx.textAlign = 'left';
-                ctx.fillText(lg.label, lx, legendY);
-                lx += ctx.measureText(lg.label).width + 20;
-            });
         };
 
         window._drawPLGraph();
