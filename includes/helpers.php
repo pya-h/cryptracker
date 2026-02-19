@@ -102,7 +102,7 @@ function e(string $s): string
 
 function plMode(): string
 {
-    return $_SESSION['pl_mode'] ?? 'avg';
+    return $_SESSION['pl_mode'] ?? 'fifo';
 }
 
 function precision(): int
@@ -125,7 +125,7 @@ function trimZeros(string $s): string
 
 function theme(): string
 {
-    return $_SESSION['theme'] ?? 'dark';
+    return $_SESSION['theme'] ?? 'light';
 }
 
 function priceSource(): string

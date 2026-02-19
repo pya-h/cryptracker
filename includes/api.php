@@ -84,12 +84,16 @@ function cmcGetAllMap(): array
     if (!is_dir($cacheDir)) mkdir($cacheDir, 0755, true);
 
     if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 43200) {
-        $mem = json_decode(file_get_contents($cacheFile), true) ?: [];
-        if (!empty($mem)) return $mem;
+        $cached = json_decode(file_get_contents($cacheFile), true) ?: [];
+        if (isValidCoinList($cached)) {
+            $mem = $cached;
+            return $mem;
+        }
+        @unlink($cacheFile);
     }
 
     $data = cmcRequest('/v1/cryptocurrency/map', ['sort' => 'cmc_rank', 'limit' => 5000]);
-    if (!is_array($data) || empty($data)) {
+    if (!isValidCoinList($data)) {
         $mem = [];
         return $mem;
     }
@@ -180,6 +184,15 @@ function resolveProviderIdsForToken(int $cmcId, string $symbol, string $name, st
         } elseif ($key !== '' && isset($idx['coinlore_sym_name'][$key])) {
             $coinloreId = (int) $idx['coinlore_sym_name'][$key];
         }
+        // Symbol-only fallback for CoinLore
+        if ($coinloreId === null && $symbol !== '') {
+            foreach (($idx['coinlore_sym_name'] ?? []) as $symKey => $clId) {
+                if (str_starts_with($symKey, $symbol . '|')) {
+                    $coinloreId = (int) $clId;
+                    break;
+                }
+            }
+        }
     }
 
     $coingeckoId = $coingeckoHint !== null ? strtolower(trim($coingeckoHint)) : null;
@@ -189,6 +202,15 @@ function resolveProviderIdsForToken(int $cmcId, string $symbol, string $name, st
             $coingeckoId = (string) $idx['gecko_slug'][$slug];
         } elseif ($key !== '' && isset($idx['gecko_sym_name'][$key])) {
             $coingeckoId = (string) $idx['gecko_sym_name'][$key];
+        }
+        // Symbol-only fallback for CoinGecko
+        if ($coingeckoId === null && $symbol !== '') {
+            foreach (($idx['gecko_sym_name'] ?? []) as $symKey => $gId) {
+                if (str_starts_with($symKey, $symbol . '|')) {
+                    $coingeckoId = (string) $gId;
+                    break;
+                }
+            }
         }
     }
 
@@ -206,13 +228,55 @@ function resolveCmcIdByMeta(string $symbol, string $name, string $slug): ?int
     $name = strtolower(trim($name));
     $slug = strtolower(trim($slug));
 
+    // 1. Exact slug match
     if ($slug !== '' && isset($idx['cmc_slug'][$slug])) {
         return (int) $idx['cmc_slug'][$slug];
     }
 
+    // 2. Exact symbol+name match
     $key = ($symbol !== '' && $name !== '') ? ($symbol . '|' . $name) : '';
     if ($key !== '' && isset($idx['cmc_sym_name'][$key])) {
         return (int) $idx['cmc_sym_name'][$key];
+    }
+
+    // 3. Symbol-only match: scan CMC map for matching symbol (pick highest rank / lowest ID)
+    if ($symbol !== '') {
+        $candidates = [];
+        foreach (($idx['cmc_by_id'] ?? []) as $id => $meta) {
+            if (strtolower((string) ($meta['symbol'] ?? '')) === $symbol) {
+                $candidates[] = (int) $id;
+            }
+        }
+        if (count($candidates) === 1) {
+            return $candidates[0];
+        }
+        // Multiple matches: prefer the one with the lowest ID (usually the most established)
+        if (!empty($candidates)) {
+            sort($candidates);
+            return $candidates[0];
+        }
+    }
+
+    // 4. Slug variations: try common transformations
+    if ($slug !== '') {
+        // Try stripping common suffixes/prefixes
+        $slugParts = explode('-', $slug);
+        // Try first part of slug (e.g., "binance-coin" → "binance")
+        // Try removing '-coin', '-token', '-network' suffixes
+        $variations = [];
+        foreach (['-coin', '-token', '-network', '-protocol'] as $suffix) {
+            if (str_ends_with($slug, $suffix)) {
+                $variations[] = substr($slug, 0, -strlen($suffix));
+            }
+        }
+        // Also try the symbol as slug
+        $variations[] = $symbol;
+
+        foreach ($variations as $altSlug) {
+            if ($altSlug !== '' && $altSlug !== $slug && isset($idx['cmc_slug'][$altSlug])) {
+                return (int) $idx['cmc_slug'][$altSlug];
+            }
+        }
     }
 
     return null;
@@ -228,6 +292,14 @@ function dbSourceMappingsByCmcIds(array $cmcIds): array
 
 function httpGet(string $url, array $extraHeaders = [], int $timeout = 15): ?string
 {
+    $hasUA = false;
+    foreach ($extraHeaders as $h) {
+        if (stripos($h, 'User-Agent:') === 0) { $hasUA = true; break; }
+    }
+    if (!$hasUA) {
+        $extraHeaders[] = 'User-Agent: CrypTracker/1.0 (PHP ' . PHP_VERSION . ')';
+    }
+
     $headers = "Accept: application/json\r\n";
     foreach ($extraHeaders as $h) $headers .= $h . "\r\n";
 
@@ -248,13 +320,34 @@ function httpGet(string $url, array $extraHeaders = [], int $timeout = 15): ?str
     ]);
 
     $res = @file_get_contents($url, false, $context);
-    return ($res !== false) ? $res : null;
+    if ($res === false) return null;
+
+    // Detect HTTP error status from response headers
+    if (isset($http_response_header) && is_array($http_response_header)) {
+        foreach ($http_response_header as $hdr) {
+            if (preg_match('/^HTTP\/[\d.]+ (\d{3})/', $hdr, $m)) {
+                $code = (int) $m[1];
+                if ($code >= 400) return null;
+            }
+        }
+    }
+
+    return $res;
 }
 
 function coinloreCacheFile(): string
 {
     $base = defined('APP_BASE_PATH') ? APP_BASE_PATH : dirname(__DIR__);
     return $base . '/database/coinlore_cache.json';
+}
+
+function isValidCoinList(mixed $data): bool
+{
+    if (!is_array($data) || empty($data)) return false;
+    // Must be an indexed array of coin objects, not an error response
+    if (isset($data['status']) || isset($data['error'])) return false;
+    $first = reset($data);
+    return is_array($first) && (isset($first['id']) || isset($first['symbol']) || isset($first['name']));
 }
 
 function geckoGetCoinList(): array
@@ -267,8 +360,13 @@ function geckoGetCoinList(): array
     if (!is_dir($cacheDir)) mkdir($cacheDir, 0755, true);
 
     if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 86400) {
-        $mem = json_decode(file_get_contents($cacheFile), true) ?: [];
-        if (!empty($mem)) return $mem;
+        $cached = json_decode(file_get_contents($cacheFile), true) ?: [];
+        if (isValidCoinList($cached)) {
+            $mem = $cached;
+            return $mem;
+        }
+        // Bad cache — delete it so a fresh fetch is attempted
+        @unlink($cacheFile);
     }
 
     $raw = httpGet('https://api.coingecko.com/api/v3/coins/list?include_platform=false', [], 20);
@@ -278,7 +376,7 @@ function geckoGetCoinList(): array
     }
 
     $list = json_decode($raw, true);
-    if (!is_array($list)) {
+    if (!isValidCoinList($list)) {
         $mem = [];
         return $mem;
     }
@@ -446,16 +544,52 @@ function cmcSearchCoins(string $query): array
 function cmcGetQuotes(array $cmcIds): array
 {
     if (empty($cmcIds)) return [];
+
+    // Validate IDs against CMC map — resolve any that aren't real CMC IDs
+    $cmcMap = cmcGetAllMap();
+    $cmcMapById = [];
+    foreach ($cmcMap as $coin) {
+        $id = (int) ($coin['id'] ?? 0);
+        if ($id > 0) $cmcMapById[$id] = true;
+    }
+
+    $validIds = [];
+    $remappedToOriginal = []; // realCmcId => storedId
+
+    foreach ($cmcIds as $storedId) {
+        if (isset($cmcMapById[$storedId])) {
+            $validIds[] = $storedId;
+        } else {
+            // This stored ID is not a real CMC ID — try to resolve the real one
+            // via token metadata (symbol/name/slug) in the DB
+            $realCmcId = _resolveRealCmcIdForStored($storedId);
+            if ($realCmcId !== null && $realCmcId !== $storedId) {
+                $validIds[] = $realCmcId;
+                $remappedToOriginal[$realCmcId] = $storedId;
+            }
+            // If we can't resolve, skip — other providers will handle it
+        }
+    }
+
+    if (empty($validIds)) return [];
+
     $data = cmcRequest('/v2/cryptocurrency/quotes/latest', [
-        'id' => implode(',', $cmcIds), 'convert' => 'USD',
+        'id' => implode(',', $validIds), 'convert' => 'USD',
     ]);
     if (!$data) return [];
 
     $out = [];
     foreach ($data as $id => $coin) {
         $q = $coin['quote']['USD'] ?? [];
-        $out[(int)$id] = [
-            'price'              => $q['price'] ?? 0,
+        $price = (float) ($q['price'] ?? 0);
+        // Skip entries with zero price (inactive/delisted tokens)
+        if ($price <= 0) continue;
+
+        // Map back to the original stored ID if remapped
+        $outId = isset($remappedToOriginal[(int) $id]) ? $remappedToOriginal[(int) $id] : (int) $id;
+
+        $out[$outId] = [
+            'price'              => $price,
             'percent_change_1h'  => $q['percent_change_1h'] ?? 0,
             'percent_change_24h' => $q['percent_change_24h'] ?? 0,
             'percent_change_7d'  => $q['percent_change_7d'] ?? 0,
@@ -469,6 +603,102 @@ function cmcGetQuotes(array $cmcIds): array
         ];
     }
     return $out;
+}
+
+/**
+ * Try to resolve the real CMC ID for a stored cmc_id that isn't in the CMC map.
+ * Looks up token metadata in the DB and uses the CMC map to find a match.
+ */
+function _resolveRealCmcIdForStored(int $storedId): ?int
+{
+    // Find this token in user_tokens by cmc_id to get symbol/name/slug
+    if (!function_exists('dbGetTokenSourceMappingsByCmcIds')) return null;
+
+    // Use a lightweight DB query to get token metadata
+    static $tokenMeta = null;
+    if ($tokenMeta === null) {
+        $tokenMeta = [];
+        if (function_exists('dbGetUserTokens')) {
+            // We need all tokens; use a direct approach depending on DB backend
+            if (function_exists('dbPdo')) {
+                try {
+                    $stmt = dbPdo()->query('SELECT cmc_id, symbol, name, slug FROM user_tokens');
+                    foreach ($stmt->fetchAll() as $row) {
+                        $tokenMeta[(int) $row['cmc_id']] = $row;
+                    }
+                } catch (\Throwable $e) {
+                    // Fallback: empty
+                }
+            } elseif (function_exists('readTable')) {
+                foreach (readTable('user_tokens') as $t) {
+                    $tokenMeta[(int) $t['cmc_id']] = $t;
+                }
+            }
+        }
+    }
+
+    $meta = $tokenMeta[$storedId] ?? null;
+    if (!$meta) return null;
+
+    $symbol = strtolower(trim((string) ($meta['symbol'] ?? '')));
+    $name = strtolower(trim((string) ($meta['name'] ?? '')));
+    $slug = strtolower(trim((string) ($meta['slug'] ?? '')));
+
+    return resolveCmcIdByMeta($symbol, $name, $slug);
+}
+
+/**
+ * Resolve CoinGecko ID for a stored cmc_id directly from token metadata.
+ */
+function _resolveGeckoIdForStored(int $storedId): ?string
+{
+    // Reuse the static tokenMeta cache from _resolveRealCmcIdForStored
+    _resolveRealCmcIdForStored($storedId); // Ensures cache is populated
+
+    $idx = tokenLookupIndexes();
+
+    // Build tokenMeta again (or access it)
+    static $localMeta = null;
+    if ($localMeta === null) {
+        $localMeta = [];
+        if (function_exists('dbPdo')) {
+            try {
+                $stmt = dbPdo()->query('SELECT cmc_id, symbol, name, slug FROM user_tokens');
+                foreach ($stmt->fetchAll() as $row) {
+                    $localMeta[(int) $row['cmc_id']] = $row;
+                }
+            } catch (\Throwable $e) {}
+        } elseif (function_exists('readTable')) {
+            foreach (readTable('user_tokens') as $t) {
+                $localMeta[(int) $t['cmc_id']] = $t;
+            }
+        }
+    }
+
+    $meta = $localMeta[$storedId] ?? null;
+    if (!$meta) return null;
+
+    $symbol = strtolower(trim((string) ($meta['symbol'] ?? '')));
+    $name = strtolower(trim((string) ($meta['name'] ?? '')));
+    $slug = strtolower(trim((string) ($meta['slug'] ?? '')));
+
+    $key = ($symbol !== '' && $name !== '') ? ($symbol . '|' . $name) : '';
+
+    // Try slug match, then sym+name, then symbol-only
+    if ($slug !== '' && isset($idx['gecko_slug'][$slug])) {
+        return (string) $idx['gecko_slug'][$slug];
+    }
+    if ($key !== '' && isset($idx['gecko_sym_name'][$key])) {
+        return (string) $idx['gecko_sym_name'][$key];
+    }
+    if ($symbol !== '') {
+        foreach (($idx['gecko_sym_name'] ?? []) as $symKey => $gId) {
+            if (str_starts_with($symKey, $symbol . '|')) {
+                return (string) $gId;
+            }
+        }
+    }
+    return null;
 }
 
 function geckoCmcMap(): array
@@ -499,6 +729,20 @@ function geckoGetQuotes(array $cmcIds): array
     $geckoToCmc = [];
     foreach ($cmcIds as $cmcId) {
         $gid = $mappings[$cmcId]['coingecko_id'] ?? ($cmcToGecko[$cmcId] ?? null);
+
+        // If no mapping found, the stored cmc_id might not be a real CMC ID.
+        // Try resolving from token metadata.
+        if (!$gid) {
+            $realCmcId = _resolveRealCmcIdForStored($cmcId);
+            if ($realCmcId !== null && $realCmcId !== $cmcId) {
+                $gid = $cmcToGecko[$realCmcId] ?? null;
+            }
+            // Also try resolving CoinGecko ID directly from token symbol/slug
+            if (!$gid) {
+                $gid = _resolveGeckoIdForStored($cmcId);
+            }
+        }
+
         if ($gid) $geckoToCmc[$gid] = $cmcId;
     }
 

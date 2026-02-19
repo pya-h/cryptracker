@@ -943,6 +943,66 @@ form .btn { margin-top: 1.2rem; }
 }
 .now-row td { font-style: italic; }
 
+/* ── Future Rows (What-If Preview) ────────────────────────── */
+
+.future-row {
+    border-top: 1px dashed rgba(162, 155, 254, .25);
+    background: rgba(162, 155, 254, .04);
+    opacity: 0.55;
+    transition: opacity .25s ease;
+}
+.future-row:hover { opacity: 0.8; }
+.future-row td { font-style: italic; font-size: .82em; }
+
+.badge-future-buy {
+    background: rgba(0, 184, 148, .10);
+    color: rgba(0, 184, 148, .7);
+    border: 1px dashed rgba(0, 184, 148, .3);
+}
+.badge-future-sell {
+    background: rgba(255, 118, 117, .10);
+    color: rgba(255, 118, 117, .7);
+    border: 1px dashed rgba(255, 118, 117, .3);
+}
+
+/* ── Future Preview Boxes (in trade forms) ────────────────── */
+
+.future-preview {
+    margin: .75rem 0;
+    padding: .65rem .85rem;
+    background: rgba(162, 155, 254, .06);
+    border: 1px dashed rgba(162, 155, 254, .25);
+    border-radius: var(--radius);
+    animation: fadeInUp .25s ease both;
+}
+
+.future-preview-label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #a29bfe;
+    margin-bottom: .4rem;
+}
+
+.future-preview-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .15rem 0;
+    font-size: .82rem;
+}
+
+.future-preview-row .label {
+    color: var(--text-muted);
+    font-size: .78rem;
+}
+
+.future-preview-row .val {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
 /* ── Tx History ───────────────────────────────────────────── */
 
 .tx-history { margin-bottom: 2rem; animation: fadeInUp .5s ease .3s both; }

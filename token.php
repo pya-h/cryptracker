@@ -72,7 +72,16 @@ layoutNav($user);
     <main class="container" data-page="token" data-token-id="<?= (int)$tokenId ?>"
           data-cmc-id="<?= (int)$token['cmc_id'] ?>"
           data-holdings="<?= $holdings ?>"
-          data-cost-basis="<?= $costBasis ?>">
+          data-cost-basis="<?= $costBasis ?>"
+          data-avg-buy="<?= $avgBuy ?>"
+          data-realized-pl="<?= $realizedPL ?>"
+          data-unrealized-pl="<?= $unrealizedPL ?>"
+          data-total-spent="<?= $totalSpent ?>"
+          data-pl-mode="<?= e($mode) ?>"
+          data-symbol="<?= e($token['symbol']) ?>"
+          data-current-price="<?= $price ?>"
+          data-pl-timeline="<?= e(json_encode($plTimeline)) ?>"
+          data-transactions="<?= e(json_encode($allTxAsc)) ?>">
         <a href="index.php" class="back-link">&larr; Back to Dashboard</a>
 
         <section class="token-header">
@@ -171,17 +180,33 @@ layoutNav($user);
         <section class="trade-forms">
             <div class="trade-card buy-card">
                 <h3>Buy <?= e($token['symbol']) ?></h3>
-                <form method="POST" action="transaction.php">
+                <form method="POST" action="transaction.php" id="buyForm">
                     <?= csrfField() ?>
                     <input type="hidden" name="user_token_id" value="<?= (int)$token['id'] ?>">
                     <input type="hidden" name="type" value="buy">
 
                     <label>Amount (<?= e($token['symbol']) ?>)</label>
-                    <input type="number" name="amount" step="any" min="0.00000001" required placeholder="0.00">
+                    <input type="number" name="amount" step="any" min="0.00000001" required placeholder="0.00" id="buyAmount">
 
                     <label>Price per unit (USD)</label>
                     <input type="number" name="price_per_unit" step="any" min="0.00000001" required
-                           value="<?= number_format($price, 6, '.', '') ?>" placeholder="0.00">
+                           value="<?= number_format($price, 6, '.', '') ?>" placeholder="0.00" id="buyPrice">
+
+                    <div class="future-preview" id="buyPreview" style="display:none;">
+                        <div class="future-preview-label">After this buy:</div>
+                        <div class="future-preview-row">
+                            <span class="label">Unrealized P/L</span>
+                            <span class="val" id="buyPreviewUnrealized">—</span>
+                        </div>
+                        <div class="future-preview-row">
+                            <span class="label">New Holdings</span>
+                            <span class="val" id="buyPreviewHoldings">—</span>
+                        </div>
+                        <div class="future-preview-row">
+                            <span class="label">New Avg Cost</span>
+                            <span class="val" id="buyPreviewAvgCost">—</span>
+                        </div>
+                    </div>
 
                     <button type="submit" class="btn btn-buy">Buy</button>
                 </form>
@@ -189,18 +214,34 @@ layoutNav($user);
 
             <div class="trade-card sell-card">
                 <h3>Sell <?= e($token['symbol']) ?></h3>
-                <form method="POST" action="transaction.php">
+                <form method="POST" action="transaction.php" id="sellForm">
                     <?= csrfField() ?>
                     <input type="hidden" name="user_token_id" value="<?= (int)$token['id'] ?>">
                     <input type="hidden" name="type" value="sell">
 
                     <label>Amount (<?= e($token['symbol']) ?>)</label>
                     <input type="number" name="amount" step="any" min="0.00000001"
-                           max="<?= $holdings ?>" required placeholder="0.00">
+                           max="<?= $holdings ?>" required placeholder="0.00" id="sellAmount">
 
                     <label>Price per unit (USD)</label>
                     <input type="number" name="price_per_unit" step="any" min="0.00000001" required
-                           value="<?= number_format($price, 6, '.', '') ?>" placeholder="0.00">
+                           value="<?= number_format($price, 6, '.', '') ?>" placeholder="0.00" id="sellPrice">
+
+                    <div class="future-preview" id="sellPreview" style="display:none;">
+                        <div class="future-preview-label">After this sell:</div>
+                        <div class="future-preview-row">
+                            <span class="label">Realized P/L</span>
+                            <span class="val" id="sellPreviewRealized">—</span>
+                        </div>
+                        <div class="future-preview-row">
+                            <span class="label">New Holdings</span>
+                            <span class="val" id="sellPreviewHoldings">—</span>
+                        </div>
+                        <div class="future-preview-row">
+                            <span class="label">Cum. Realized</span>
+                            <span class="val" id="sellPreviewCumRealized">—</span>
+                        </div>
+                    </div>
 
                     <button type="submit" class="btn btn-sell" <?= $holdings <= 0 ? 'disabled' : '' ?>>Sell</button>
                 </form>
@@ -424,9 +465,17 @@ layoutNav($user);
             ctx.fill();
 
             function drawLine(key, color, lineW, dashPattern) {
+                // Find the boundary between real and future points
+                let lastRealIdx = data.length - 1;
+                for (let i = data.length - 1; i >= 0; i--) {
+                    if (!data[i].is_future) { lastRealIdx = i; break; }
+                }
+                const hasFuture = lastRealIdx < data.length - 1;
+
+                // Draw real portion
                 ctx.beginPath();
                 ctx.setLineDash(dashPattern || []);
-                for (let i = 0; i < data.length; i++) {
+                for (let i = 0; i <= lastRealIdx; i++) {
                     const x = xPos(i), y = yPos(data[i][key]);
                     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
                 }
@@ -436,16 +485,44 @@ layoutNav($user);
                 ctx.stroke();
                 ctx.setLineDash([]);
 
+                // Draw future portion (dashed, semi-transparent)
+                if (hasFuture) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.45;
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 4]);
+                    ctx.moveTo(xPos(lastRealIdx), yPos(data[lastRealIdx][key]));
+                    for (let i = lastRealIdx + 1; i < data.length; i++) {
+                        ctx.lineTo(xPos(i), yPos(data[i][key]));
+                    }
+                    ctx.strokeStyle = color.line;
+                    ctx.lineWidth = lineW;
+                    ctx.lineJoin = 'round';
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.restore();
+                }
+
+                // Draw dots
                 data.forEach((d, i) => {
-                    const isNow = d.is_now && i === data.length - 1;
-                    const r = isNow ? 5 : 3;
+                    const isNow = d.is_now;
+                    const isFuture = d.is_future;
+                    const r = isNow ? 5 : isFuture ? 4 : 3;
+
+                    ctx.save();
+                    if (isFuture) ctx.globalAlpha = 0.45;
+
                     ctx.beginPath();
                     ctx.arc(xPos(i), yPos(d[key]), r, 0, Math.PI * 2);
                     ctx.fillStyle = color.dot;
                     ctx.fill();
-                    ctx.strokeStyle = isNow ? '#fff' : '#0b0d14';
-                    ctx.lineWidth = isNow ? 2 : 1.5;
+                    ctx.strokeStyle = isNow ? '#fff' : isFuture ? color.line : '#0b0d14';
+                    ctx.lineWidth = isNow ? 2 : isFuture ? 1.5 : 1.5;
+                    ctx.setLineDash(isFuture ? [2, 2] : []);
                     ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.restore();
                 });
             }
 
@@ -453,16 +530,28 @@ layoutNav($user);
             drawLine('unrealized',   COLORS.unrealized,  2, [3, 3]);
             drawLine('total_pl',     COLORS.totalPL,     2.5);
 
-            // "Now" label on last point
-            const last = data[data.length - 1];
-            if (last.is_now) {
-                const nx = xPos(data.length - 1);
-                const ny = yPos(last.total_pl);
-                ctx.fillStyle = '#6c5ce7';
-                ctx.font = '600 10px Inter, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('NOW', nx, ny - 10);
-            }
+            // "Now" label — find the Now point (may not be last anymore)
+            data.forEach((d, i) => {
+                if (d.is_now) {
+                    const nx = xPos(i);
+                    const ny = yPos(d.total_pl);
+                    ctx.fillStyle = '#6c5ce7';
+                    ctx.font = '600 10px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('NOW', nx, ny - 10);
+                }
+                if (d.is_future) {
+                    const fx = xPos(i);
+                    const fy = yPos(d.total_pl);
+                    ctx.save();
+                    ctx.globalAlpha = 0.55;
+                    ctx.fillStyle = '#a29bfe';
+                    ctx.font = '600 9px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('FUTURE', fx, fy - 10);
+                    ctx.restore();
+                }
+            });
 
             ctx.fillStyle = '#7c819a';
             ctx.font = '10px Inter, sans-serif';
@@ -470,15 +559,21 @@ layoutNav($user);
             const maxLabels = Math.min(data.length, Math.floor(gW / 80));
             const step = Math.max(1, Math.floor(data.length / maxLabels));
             for (let i = 0; i < data.length; i += step) {
-                const d = new Date(data[i].date);
-                const label = data[i].is_now ? 'Now' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const d = data[i];
+                ctx.save();
+                if (d.is_future) ctx.globalAlpha = 0.5;
+                const label = d.is_now ? 'Now' : d.is_future ? 'Future' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 ctx.fillText(label, xPos(i), H - pad.bottom + 18);
+                ctx.restore();
             }
             // Always label the last point if not already labelled
             if ((data.length - 1) % step !== 0) {
                 const d = data[data.length - 1];
-                const label = d.is_now ? 'Now' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                ctx.save();
+                if (d.is_future) ctx.globalAlpha = 0.5;
+                const label = d.is_now ? 'Now' : d.is_future ? 'Future' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 ctx.fillText(label, xPos(data.length - 1), H - pad.bottom + 18);
+                ctx.restore();
             }
 
             ctx.fillStyle = '#e4e7ef';
