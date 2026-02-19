@@ -142,23 +142,23 @@ layoutNav($user);
             <div class="market-grid">
                 <div class="market-item">
                     <span class="label">1h Change</span>
-                    <span class="val <?= plClass($change1h) ?>"><?= formatPercent($change1h) ?></span>
+                    <span class="val <?= plClass($change1h) ?>" data-live-market="change1h"><?= formatPercent($change1h) ?></span>
                 </div>
                 <div class="market-item">
                     <span class="label">24h Change</span>
-                    <span class="val <?= plClass($change24) ?>"><?= formatPercent($change24) ?></span>
+                    <span class="val <?= plClass($change24) ?>" data-live-market="change24"><?= formatPercent($change24) ?></span>
                 </div>
                 <div class="market-item">
                     <span class="label">7d Change</span>
-                    <span class="val <?= plClass($change7d) ?>"><?= formatPercent($change7d) ?></span>
+                    <span class="val <?= plClass($change7d) ?>" data-live-market="change7d"><?= formatPercent($change7d) ?></span>
                 </div>
                 <div class="market-item">
                     <span class="label">Market Cap</span>
-                    <span class="val"><?= formatBigNum($marketCap) ?></span>
+                    <span class="val" data-live-market="marketCap"><?= formatBigNum($marketCap) ?></span>
                 </div>
                 <div class="market-item">
                     <span class="label">24h Volume</span>
-                    <span class="val"><?= formatBigNum($volume24) ?></span>
+                    <span class="val" data-live-market="volume24"><?= formatBigNum($volume24) ?></span>
                 </div>
                 <div class="market-item">
                     <span class="label">Circulating Supply</span>

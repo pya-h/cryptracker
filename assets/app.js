@@ -335,6 +335,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return s;
     }
 
+    function formatBigNumJS(v) {
+        const p = getPrec();
+        if (v >= 1e12) return trimZerosJS('$' + (v / 1e12).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + 'T';
+        if (v >= 1e9)  return trimZerosJS('$' + (v / 1e9).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + 'B';
+        if (v >= 1e6)  return trimZerosJS('$' + (v / 1e6).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + 'M';
+        if (v >= 1e3)  return trimZerosJS('$' + (v / 1e3).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + 'K';
+        return trimZerosJS('$' + v.toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p }));
+    }
+
     function updateDashboard(quotes) {
         const tblDec = getPrec();
 
@@ -454,6 +463,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (totalPctEl) { totalPctEl.textContent = '(' + formatPercentJS(totalPct, dec) + ')'; }
 
+        // ── Live-update market data section ──
+        try {
+            const mChange1h  = document.querySelector('[data-live-market="change1h"]');
+            const mChange24  = document.querySelector('[data-live-market="change24"]');
+            const mChange7d  = document.querySelector('[data-live-market="change7d"]');
+            const mMarketCap = document.querySelector('[data-live-market="marketCap"]');
+            const mVolume24  = document.querySelector('[data-live-market="volume24"]');
+
+            if (mChange1h && q.percent_change_1h != null) {
+                mChange1h.textContent = formatPercentJS(q.percent_change_1h, dec);
+                mChange1h.className = 'val ' + plClassJS(q.percent_change_1h);
+                flashEl(mChange1h);
+            }
+            if (mChange24 && q.percent_change_24h != null) {
+                mChange24.textContent = formatPercentJS(q.percent_change_24h, dec);
+                mChange24.className = 'val ' + plClassJS(q.percent_change_24h);
+                flashEl(mChange24);
+            }
+            if (mChange7d && q.percent_change_7d != null) {
+                mChange7d.textContent = formatPercentJS(q.percent_change_7d, dec);
+                mChange7d.className = 'val ' + plClassJS(q.percent_change_7d);
+                flashEl(mChange7d);
+            }
+            if (mMarketCap && q.market_cap != null) {
+                mMarketCap.textContent = formatBigNumJS(q.market_cap);
+                flashEl(mMarketCap);
+            }
+            if (mVolume24 && q.volume_24h != null) {
+                mVolume24.textContent = formatBigNumJS(q.volume_24h);
+                flashEl(mVolume24);
+            }
+        } catch (e) { console.error('[CrypTracker] market data update error:', e); }
+
         // Update "Now" row in analytics table
         const nowRow = document.querySelector('tr[data-live-now="1"]');
         if (nowRow) {
@@ -483,24 +525,49 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Update graph "Now" point and redraw
-        if (window._plGraphData && window._drawPLGraph) {
-            const gd = window._plGraphData;
-            // Find the NOW point (may not be the last point if future points exist)
-            const nowPoint = gd.find(d => d.is_now);
+        // Update graph "Now" point
+        if (window._plGraphData) {
+            const nowPoint = window._plGraphData.find(d => d.is_now);
             if (nowPoint) {
                 nowPoint.date = new Date().toISOString().slice(0, 19).replace('T', ' ');
                 nowPoint.total_pl = newTotal;
                 nowPoint.unrealized = newUnreal;
             }
-            // Don't redraw here — future previews will redraw with updated price
         }
 
-        // Recalculate future previews with the new price
-        if (window._updateFuturePreviews) {
-            window._updateFuturePreviews();
-        } else if (window._drawPLGraph) {
-            window._drawPLGraph();
+        // ── Auto-update form "Price per unit" inputs ──
+        // Only when user isn't actively filling the form (Amount field is empty).
+        try {
+            const buyAmtInput  = document.getElementById('buyAmount');
+            const buyPrcInput  = document.getElementById('buyPrice');
+            const sellAmtInput = document.getElementById('sellAmount');
+            const sellPrcInput = document.getElementById('sellPrice');
+
+            if (buyAmtInput && buyPrcInput) {
+                const buyAmtVal = parseFloat(buyAmtInput.value) || 0;
+                if (buyAmtVal === 0) {
+                    buyPrcInput.value = newPrice;
+                }
+            }
+            if (sellAmtInput && sellPrcInput) {
+                const sellAmtVal = parseFloat(sellAmtInput.value) || 0;
+                if (sellAmtVal === 0) {
+                    sellPrcInput.value = newPrice;
+                }
+            }
+        } catch (e) { console.error('[CrypTracker] form auto-update error:', e); }
+
+        // Recalculate future previews, table rows, and graph with the new price
+        try {
+            if (window._updateFuturePreviews) {
+                window._updateFuturePreviews();
+            } else if (window._drawPLGraph) {
+                window._drawPLGraph();
+            }
+        } catch (e) {
+            console.error('[CrypTracker] future preview update error:', e);
+            // Ensure graph still redraws even if future update fails
+            if (window._drawPLGraph) { try { window._drawPLGraph(); } catch (_) {} }
         }
     }
 
@@ -537,8 +604,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (page === 'dashboard') updateDashboard(quotes);
             if (page === 'token') updateTokenPage(quotes);
-        } catch (_) {
-            /* silent fail — next tick retries */
+        } catch (e) {
+            console.error('[CrypTracker] refreshPrices error:', e);
         } finally {
             refreshInFlight = false;
         }
@@ -975,6 +1042,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fullTimeline = fullResult.timeline;
                 const futureTimelineEntries = fullTimeline.slice(baseTxs.length);
 
+                // Post-process future entries: recalculate unrealized & total_pl
+                // using the live market price instead of the transaction price.
+                // The timeline engine computes unrealized as holdings * tx_price - costBasis,
+                // which is correct for historical entries (snapshot at that moment), but for
+                // future entries we want valuation at the live price.
+                futureTimelineEntries.forEach(entry => {
+                    const costBasis = entry.holdings * entry.avg_cost;
+                    entry.unrealized = entry.holdings * currentPrice - costBasis;
+                    entry.total_pl   = entry.cum_realized + entry.unrealized;
+                });
+
                 // Insert future rows into the analytics table after the Now row
                 const nowRow = document.querySelector('tr[data-live-now="1"]');
                 const tableBody = nowRow ? nowRow.parentElement : null;
@@ -1019,6 +1097,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         insertAfter.after(tr);
                         insertAfter = tr;
+                        // Flash the unrealized and total P/L cells on periodic updates
+                        const cells = tr.querySelectorAll('td');
+                        if (cells.length >= 10) {
+                            flashEl(cells[8]); // unrealized
+                            flashEl(cells[9]); // total P/L
+                        }
                     });
                 }
 
