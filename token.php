@@ -242,8 +242,9 @@ layoutNav($user);
         <section class="pl-analytics animate-fade-in-up">
             <h2>P/L Analytics</h2>
 
-            <div class="graph-container">
+            <div class="graph-container" id="graphContainer">
                 <canvas id="plGraph" width="800" height="280"></canvas>
+                <div id="graphTooltip" class="graph-tooltip"></div>
                 <div id="graphLegend" class="graph-legend"></div>
             </div>
 
@@ -378,11 +379,13 @@ layoutNav($user);
 
         const ctx = canvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
+        const container = document.getElementById('graphContainer');
+        const tooltip = document.getElementById('graphTooltip');
 
         const COLORS = {
-            totalPL:     { line: '#6c5ce7', fill: 'rgba(108,92,231,0.12)', dot: '#6c5ce7' },
-            unrealized:  { line: '#fdcb6e', fill: 'rgba(253,203,110,0.08)', dot: '#fdcb6e' },
-            cumRealized: { line: '#00cec9', fill: 'rgba(0,206,201,0.08)', dot: '#00cec9' },
+            totalPL:     { line: '#6c5ce7', fill: 'rgba(108,92,231,0.12)', dot: '#6c5ce7', glow: 'rgba(108,92,231,0.5)' },
+            unrealized:  { line: '#fdcb6e', fill: 'rgba(253,203,110,0.08)', dot: '#fdcb6e', glow: 'rgba(253,203,110,0.5)' },
+            cumRealized: { line: '#00cec9', fill: 'rgba(0,206,201,0.08)', dot: '#00cec9', glow: 'rgba(0,206,201,0.5)' },
         };
 
         const SERIES = [
@@ -391,7 +394,21 @@ layoutNav($user);
             { key: 'cum_realized', label: 'Cum. Realized',  color: COLORS.cumRealized, lineW: 2,   dash: [6, 3] },
         ];
 
-        // Build HTML legend
+        /* Hover state */
+        let hoveredIdx = -1;
+        let _lastW = 0, _lastH = 0;
+        let _pad, _gW, _gH, _minV, _maxV;
+
+        /* Helpers for coordinate mapping (cached after each draw) */
+        function xPos(i) {
+            const data = window._plGraphData;
+            return _pad.left + (data.length === 1 ? _gW / 2 : (i / (data.length - 1)) * _gW);
+        }
+        function yPos(v) {
+            return _pad.top + _gH - ((v - _minV) / (_maxV - _minV)) * _gH;
+        }
+
+        /* Build HTML legend */
         const legendContainer = document.getElementById('graphLegend');
         if (legendContainer) {
             SERIES.forEach(s => {
@@ -413,28 +430,47 @@ layoutNav($user);
             });
         }
 
-        window._drawPLGraph = function() {
+        /* Format value for tooltip */
+        function fmtVal(v) {
+            const abs = Math.abs(v);
+            const s = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return (v >= 0 ? '+$' : '-$') + s;
+        }
+
+        function fmtDate(d) {
+            if (d.is_now) return 'Now';
+            if (d.is_future) return 'Future';
+            const dt = new Date(d.date);
+            return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                + ' ' + dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+
+        window._drawPLGraph = function(animProgress) {
             const data = window._plGraphData;
             if (!data.length) return;
 
             const hidden = window._plHiddenSeries;
+            const anim = typeof animProgress === 'number' ? animProgress : 1;
 
             const rect = canvas.parentElement.getBoundingClientRect();
-            canvas.width  = rect.width * dpr;
-            canvas.height = 320 * dpr;
-            canvas.style.width  = rect.width + 'px';
-            canvas.style.height = '320px';
-            ctx.scale(dpr, dpr);
-
             const W = rect.width;
             const H = 320;
+            _lastW = W; _lastH = H;
+
+            canvas.width  = W * dpr;
+            canvas.height = H * dpr;
+            canvas.style.width  = W + 'px';
+            canvas.style.height = H + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
             const pad = { top: 30, right: 20, bottom: 32, left: 65 };
             const gW = W - pad.left - pad.right;
             const gH = H - pad.top - pad.bottom;
+            _pad = pad; _gW = gW; _gH = gH;
 
             ctx.clearRect(0, 0, W, H);
 
-            // Compute value range only from visible series
+            /* Compute value range */
             const visibleKeys = SERIES.filter(s => !hidden.has(s.key)).map(s => s.key);
             let allVals;
             if (visibleKeys.length === 0) {
@@ -448,10 +484,9 @@ layoutNav($user);
             const range = maxV - minV;
             minV -= range * 0.1;
             maxV += range * 0.1;
+            _minV = minV; _maxV = maxV;
 
-            function xPos(i) { return pad.left + (data.length === 1 ? gW / 2 : (i / (data.length - 1)) * gW); }
-            function yPos(v) { return pad.top + gH - ((v - minV) / (maxV - minV)) * gH; }
-
+            /* Grid */
             ctx.strokeStyle = 'rgba(255,255,255,0.06)';
             ctx.lineWidth = 1;
             const gridN = 5;
@@ -465,6 +500,7 @@ layoutNav($user);
                 ctx.fillText('$' + val.toFixed(2), pad.left - 8, y + 4);
             }
 
+            /* Zero line */
             const zeroY = yPos(0);
             if (zeroY >= pad.top && zeroY <= pad.top + gH) {
                 ctx.strokeStyle = 'rgba(255,255,255,0.15)';
@@ -473,8 +509,31 @@ layoutNav($user);
                 ctx.setLineDash([]);
             }
 
-            // Gradient fill for total_pl (only when visible)
+            /* Hover crosshair */
+            if (hoveredIdx >= 0 && hoveredIdx < data.length) {
+                const hx = xPos(hoveredIdx);
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(hx, pad.top);
+                ctx.lineTo(hx, pad.top + gH);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+
+            /* Animated clip for line reveal */
+            const animClipX = pad.left + gW * anim;
+
+            /* Gradient fill for total_pl */
             if (!hidden.has('total_pl')) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(pad.left, pad.top, gW * anim, gH);
+                ctx.clip();
+
                 const lastTotal = data[data.length - 1].total_pl;
                 const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + gH);
                 if (lastTotal >= 0) {
@@ -491,19 +550,25 @@ layoutNav($user);
                 ctx.closePath();
                 ctx.fillStyle = grad;
                 ctx.fill();
+                ctx.restore();
             }
 
             function drawLine(key, color, lineW, dashPattern) {
                 if (hidden.has(key)) return;
 
-                // Find the boundary between real and future points
                 let lastRealIdx = data.length - 1;
                 for (let i = data.length - 1; i >= 0; i--) {
                     if (!data[i].is_future) { lastRealIdx = i; break; }
                 }
                 const hasFuture = lastRealIdx < data.length - 1;
 
-                // Draw real portion
+                /* Clip to animation progress */
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(pad.left - 5, 0, gW * anim + 10, H);
+                ctx.clip();
+
+                /* Real portion */
                 ctx.beginPath();
                 ctx.setLineDash(dashPattern || []);
                 for (let i = 0; i <= lastRealIdx; i++) {
@@ -513,10 +578,11 @@ layoutNav($user);
                 ctx.strokeStyle = color.line;
                 ctx.lineWidth = lineW;
                 ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Draw future portion (dashed, semi-transparent)
+                /* Future portion */
                 if (hasFuture) {
                     ctx.save();
                     ctx.globalAlpha = 0.45;
@@ -529,92 +595,260 @@ layoutNav($user);
                     ctx.strokeStyle = color.line;
                     ctx.lineWidth = lineW;
                     ctx.lineJoin = 'round';
+                    ctx.lineCap = 'round';
                     ctx.stroke();
                     ctx.setLineDash([]);
                     ctx.restore();
                 }
 
-                // Draw dots
+                /* Dots */
                 data.forEach((d, i) => {
+                    if (xPos(i) > animClipX + 2) return;
                     const isNow = d.is_now;
                     const isFuture = d.is_future;
-                    const r = isNow ? 5 : isFuture ? 4 : 3;
+                    const isHovered = (i === hoveredIdx);
+
+                    let r = isNow ? 5 : isFuture ? 4 : 3;
+                    if (isHovered) r += 2.5;
 
                     ctx.save();
-                    if (isFuture) ctx.globalAlpha = 0.45;
+                    if (isFuture && !isHovered) ctx.globalAlpha = 0.45;
+
+                    /* Glow ring on hover */
+                    if (isHovered) {
+                        ctx.beginPath();
+                        ctx.arc(xPos(i), yPos(d[key]), r + 4, 0, Math.PI * 2);
+                        ctx.fillStyle = color.glow;
+                        ctx.globalAlpha = 0.25;
+                        ctx.fill();
+                        ctx.globalAlpha = isFuture ? 0.7 : 1;
+                    }
 
                     ctx.beginPath();
                     ctx.arc(xPos(i), yPos(d[key]), r, 0, Math.PI * 2);
-                    ctx.fillStyle = color.dot;
+                    ctx.fillStyle = isHovered ? '#fff' : color.dot;
                     ctx.fill();
-                    ctx.strokeStyle = isNow ? '#fff' : isFuture ? color.line : '#0b0d14';
-                    ctx.lineWidth = isNow ? 2 : isFuture ? 1.5 : 1.5;
-                    ctx.setLineDash(isFuture ? [2, 2] : []);
+                    ctx.strokeStyle = isHovered ? color.line : (isNow ? '#fff' : isFuture ? color.line : '#0b0d14');
+                    ctx.lineWidth = isHovered ? 2.5 : (isNow ? 2 : 1.5);
+                    ctx.setLineDash(isFuture && !isHovered ? [2, 2] : []);
                     ctx.stroke();
                     ctx.setLineDash([]);
 
                     ctx.restore();
                 });
+
+                ctx.restore(); /* pop anim clip */
             }
 
             SERIES.forEach(s => drawLine(s.key, s.color, s.lineW, s.dash));
 
-            // "Now" & "Future" labels — only if total_pl visible
-            if (!hidden.has('total_pl')) {
+            /* "Now" & "Future" labels */
+            if (!hidden.has('total_pl') && anim >= 1) {
                 data.forEach((d, i) => {
+                    if (hoveredIdx >= 0) return; /* hide labels when hovering */
                     if (d.is_now) {
-                        const nx = xPos(i);
-                        const ny = yPos(d.total_pl);
+                        const nx = xPos(i), ny = yPos(d.total_pl);
                         ctx.fillStyle = '#6c5ce7';
                         ctx.font = '600 10px Inter, sans-serif';
                         ctx.textAlign = 'center';
-                        ctx.fillText('NOW', nx, ny - 10);
+                        ctx.fillText('NOW', nx, ny - 12);
                     }
                     if (d.is_future) {
-                        const fx = xPos(i);
-                        const fy = yPos(d.total_pl);
+                        const fx = xPos(i), fy = yPos(d.total_pl);
                         ctx.save();
                         ctx.globalAlpha = 0.55;
                         ctx.fillStyle = '#a29bfe';
                         ctx.font = '600 9px Inter, sans-serif';
                         ctx.textAlign = 'center';
-                        ctx.fillText('FUTURE', fx, fy - 10);
+                        ctx.fillText('FUTURE', fx, fy - 12);
                         ctx.restore();
                     }
                 });
             }
 
-            ctx.fillStyle = '#7c819a';
-            ctx.font = '10px Inter, sans-serif';
-            ctx.textAlign = 'center';
-            const maxLabels = Math.min(data.length, Math.floor(gW / 80));
-            const step = Math.max(1, Math.floor(data.length / maxLabels));
-            for (let i = 0; i < data.length; i += step) {
-                const d = data[i];
-                ctx.save();
-                if (d.is_future) ctx.globalAlpha = 0.5;
-                const label = d.is_now ? 'Now' : d.is_future ? 'Future' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                ctx.fillText(label, xPos(i), H - pad.bottom + 18);
-                ctx.restore();
-            }
-            // Always label the last point if not already labelled
-            if ((data.length - 1) % step !== 0) {
-                const d = data[data.length - 1];
-                ctx.save();
-                if (d.is_future) ctx.globalAlpha = 0.5;
-                const label = d.is_now ? 'Now' : d.is_future ? 'Future' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                ctx.fillText(label, xPos(data.length - 1), H - pad.bottom + 18);
-                ctx.restore();
+            /* X-axis labels */
+            if (anim >= 1) {
+                ctx.fillStyle = '#7c819a';
+                ctx.font = '10px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                const maxLabels = Math.min(data.length, Math.floor(gW / 80));
+                const step = Math.max(1, Math.floor(data.length / maxLabels));
+                for (let i = 0; i < data.length; i += step) {
+                    const d = data[i];
+                    ctx.save();
+                    if (d.is_future) ctx.globalAlpha = 0.5;
+                    if (i === hoveredIdx) { ctx.fillStyle = '#e4e7ef'; ctx.font = '600 10px Inter, sans-serif'; }
+                    const label = d.is_now ? 'Now' : d.is_future ? 'Future' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    ctx.fillText(label, xPos(i), H - pad.bottom + 18);
+                    ctx.restore();
+                }
+                if ((data.length - 1) % step !== 0) {
+                    const d = data[data.length - 1];
+                    ctx.save();
+                    if (d.is_future) ctx.globalAlpha = 0.5;
+                    const label = d.is_now ? 'Now' : d.is_future ? 'Future' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    ctx.fillText(label, xPos(data.length - 1), H - pad.bottom + 18);
+                    ctx.restore();
+                }
             }
 
+            /* Title */
             ctx.fillStyle = '#e4e7ef';
             ctx.font = '600 12px Inter, sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText('P/L Over Time', pad.left, 18);
         };
 
-        window._drawPLGraph();
-        window.addEventListener('resize', window._drawPLGraph);
+        /* ── Entry animation ─────────────────────────────── */
+        let _animDone = false;
+        function animateEntry() {
+            const dur = 900;
+            const start = performance.now();
+            function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+            function tick(now) {
+                const t = Math.min((now - start) / dur, 1);
+                window._drawPLGraph(easeOutCubic(t));
+                if (t < 1) requestAnimationFrame(tick);
+                else _animDone = true;
+            }
+            requestAnimationFrame(tick);
+        }
+
+        /* ── Hover handling ──────────────────────────────── */
+        function getMouseIdx(e) {
+            const data = window._plGraphData;
+            if (!data.length || !_pad) return -1;
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            /* Outside graph area */
+            if (mx < _pad.left || mx > _pad.left + _gW || my < _pad.top || my > _pad.top + _gH) return -1;
+
+            /* Snap to nearest data point */
+            let bestIdx = 0, bestDist = Infinity;
+            for (let i = 0; i < data.length; i++) {
+                const dx = Math.abs(xPos(i) - mx);
+                if (dx < bestDist) { bestDist = dx; bestIdx = i; }
+            }
+            return bestIdx;
+        }
+
+        function showTooltip(idx, e) {
+            const data = window._plGraphData;
+            if (idx < 0 || idx >= data.length || !tooltip) return;
+            const d = data[idx];
+            const hidden = window._plHiddenSeries;
+            const visibleSeries = SERIES.filter(s => !hidden.has(s.key));
+
+            let html = '<div class="graph-tooltip-date">' + fmtDate(d) + '</div>';
+            html += '<div class="graph-tooltip-rows">';
+            visibleSeries.forEach(s => {
+                const v = d[s.key];
+                const cls = v >= 0 ? 'profit' : 'loss';
+                html += '<div class="graph-tooltip-row">'
+                    + '<span class="graph-tooltip-swatch" style="background:' + s.color.line + '"></span>'
+                    + '<span class="graph-tooltip-label">' + s.label + '</span>'
+                    + '<span class="graph-tooltip-val ' + cls + '">' + fmtVal(v) + '</span>'
+                    + '</div>';
+            });
+            html += '</div>';
+            if (d.is_now) html += '<div class="graph-tooltip-badge badge-now-tip">NOW</div>';
+            else if (d.is_future) html += '<div class="graph-tooltip-badge badge-future-tip">FUTURE</div>';
+
+            tooltip.innerHTML = html;
+            tooltip.classList.add('visible');
+
+            /* Position tooltip: prefer right of cursor, flip if overflowing */
+            const rect = container.getBoundingClientRect();
+            const cx = e.clientX - rect.left;
+            const cy = e.clientY - rect.top;
+            const tw = tooltip.offsetWidth;
+            const th = tooltip.offsetHeight;
+            let tx = cx + 16;
+            let ty = cy - th / 2;
+            if (tx + tw > rect.width - 8) tx = cx - tw - 16;
+            if (ty < 4) ty = 4;
+            if (ty + th > rect.height - 4) ty = rect.height - th - 4;
+
+            tooltip.style.left = tx + 'px';
+            tooltip.style.top = ty + 'px';
+        }
+
+        function hideTooltip() {
+            if (tooltip) tooltip.classList.remove('visible');
+        }
+
+        canvas.addEventListener('mousemove', e => {
+            if (!_animDone) return;
+            const idx = getMouseIdx(e);
+            if (idx !== hoveredIdx) {
+                hoveredIdx = idx;
+                window._drawPLGraph();
+            }
+            if (idx >= 0) {
+                canvas.style.cursor = 'crosshair';
+                showTooltip(idx, e);
+            } else {
+                canvas.style.cursor = 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            if (hoveredIdx !== -1) {
+                hoveredIdx = -1;
+                window._drawPLGraph();
+            }
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        /* Touch support for mobile */
+        canvas.addEventListener('touchstart', e => {
+            if (!_animDone || !e.touches.length) return;
+            const touch = e.touches[0];
+            const fakeE = { clientX: touch.clientX, clientY: touch.clientY };
+            const idx = getMouseIdx(fakeE);
+            if (idx >= 0) {
+                e.preventDefault();
+                hoveredIdx = idx;
+                window._drawPLGraph();
+                showTooltip(idx, fakeE);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', e => {
+            if (!_animDone || !e.touches.length) return;
+            const touch = e.touches[0];
+            const fakeE = { clientX: touch.clientX, clientY: touch.clientY };
+            const idx = getMouseIdx(fakeE);
+            if (idx !== hoveredIdx) {
+                hoveredIdx = idx;
+                window._drawPLGraph();
+            }
+            if (idx >= 0) showTooltip(idx, fakeE);
+            else hideTooltip();
+        }, { passive: true });
+
+        canvas.addEventListener('touchend', () => {
+            hoveredIdx = -1;
+            window._drawPLGraph();
+            hideTooltip();
+        });
+
+        /* Initial draw with animation */
+        animateEntry();
+
+        /* Re-animate on resize */
+        let _resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(() => {
+                _animDone = false;
+                animateEntry();
+            }, 150);
+        });
     })();
     </script>
 
