@@ -1152,18 +1152,18 @@ form .btn { margin-top: 1.2rem; }
     position: absolute;
     pointer-events: none;
     z-index: 30;
-    background: var(--bg-card-solid, #181a27);
-    border: 1px solid rgba(108,92,231,.3);
+    background: rgba(24, 26, 39, 0.55);
+    border: 1px solid rgba(108,92,231,.25);
     border-radius: 10px;
     padding: .6rem .8rem;
     min-width: 155px;
-    box-shadow: 0 8px 32px rgba(0,0,0,.35), 0 0 0 1px rgba(108,92,231,.08);
+    box-shadow: 0 8px 32px rgba(0,0,0,.2), 0 0 0 1px rgba(108,92,231,.06);
     opacity: 0;
     transform: translateY(4px) scale(.96);
     transition: opacity .15s ease, transform .15s ease;
     font-size: .78rem;
     line-height: 1.4;
-    backdrop-filter: blur(14px);
+    backdrop-filter: blur(18px);
 }
 
 .graph-tooltip.visible {
@@ -1238,6 +1238,141 @@ form .btn { margin-top: 1.2rem; }
 .badge-future-tip {
     background: rgba(162,155,254,.12);
     color: #a29bfe;
+}
+
+/* ── Graph Selection Rectangle ───────────────────────────── */
+
+.graph-sel-rect {
+    display: none;
+    position: absolute;
+    border: 2px dashed rgba(108,92,231,.7);
+    background: rgba(108,92,231,.08);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 25;
+    box-shadow: 0 0 12px rgba(108,92,231,.15);
+}
+.graph-sel-rect.active {
+    display: block;
+}
+.graph-container.selecting {
+    cursor: crosshair !important;
+}
+.graph-container.selecting canvas {
+    cursor: crosshair !important;
+}
+
+/* ── Screenshot Modal ────────────────────────────────────── */
+
+.graph-screenshot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,.72);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity .2s ease;
+}
+.graph-screenshot-overlay.visible {
+    opacity: 1;
+}
+.graph-screenshot-modal {
+    position: relative;
+    background: var(--bg-card-solid, #181a27);
+    border: 1px solid rgba(108,92,231,.2);
+    border-radius: 14px;
+    padding: 0;
+    max-width: 92vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0,0,0,.5), 0 0 0 1px rgba(108,92,231,.1);
+    overflow: hidden;
+}
+.graph-screenshot-toolbar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .6rem 1rem;
+    background: rgba(255,255,255,.03);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    flex-shrink: 0;
+}
+.graph-screenshot-toolbar .ss-title {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--text-main, #e4e7ef);
+    margin-right: auto;
+    letter-spacing: .02em;
+}
+.graph-screenshot-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .3rem;
+    padding: .35rem .65rem;
+    border-radius: 7px;
+    border: 1px solid rgba(255,255,255,.08);
+    background: rgba(255,255,255,.04);
+    color: var(--text-muted, #9ca3b8);
+    font-size: .75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+    user-select: none;
+}
+.graph-screenshot-btn:hover {
+    background: rgba(108,92,231,.15);
+    color: #a29bfe;
+    border-color: rgba(108,92,231,.3);
+}
+.graph-screenshot-btn.primary {
+    background: rgba(108,92,231,.18);
+    color: #a29bfe;
+    border-color: rgba(108,92,231,.3);
+}
+.graph-screenshot-btn.primary:hover {
+    background: rgba(108,92,231,.3);
+    color: #c4b5fd;
+}
+.graph-screenshot-btn.close-btn {
+    padding: .3rem .45rem;
+    font-size: .9rem;
+    line-height: 1;
+}
+.graph-screenshot-viewport {
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.2rem;
+    min-height: 180px;
+    max-height: calc(90vh - 52px);
+    cursor: grab;
+    background: repeating-conic-gradient(rgba(255,255,255,.02) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px;
+}
+.graph-screenshot-viewport:active {
+    cursor: grabbing;
+}
+.graph-screenshot-viewport img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 6px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.3);
+    transition: transform .2s ease;
+    transform-origin: center center;
+    image-rendering: auto;
+}
+.graph-screenshot-zoom-info {
+    font-size: .68rem;
+    color: var(--text-muted, #9ca3b8);
+    font-variant-numeric: tabular-nums;
+    min-width: 3.5em;
+    text-align: center;
 }
 
 /* ── Graph Legend (interactive) ───────────────────────────── */

@@ -244,6 +244,7 @@ layoutNav($user);
 
             <div class="graph-container" id="graphContainer">
                 <canvas id="plGraph" width="800" height="280"></canvas>
+                <div id="graphSelRect" class="graph-sel-rect"></div>
                 <div id="graphTooltip" class="graph-tooltip"></div>
                 <div id="graphLegend" class="graph-legend"></div>
             </div>
@@ -836,6 +837,190 @@ layoutNav($user);
             window._drawPLGraph();
             hideTooltip();
         });
+
+        /* ── Drag-to-select screenshot ───────────────────── */
+        const selRect = document.getElementById('graphSelRect');
+        let _dragging = false, _dragStart = null, _dragCurrent = null;
+        const DRAG_THRESHOLD = 6;
+
+        function containerPos(e) {
+            const r = container.getBoundingClientRect();
+            return { x: e.clientX - r.left, y: e.clientY - r.top };
+        }
+
+        canvas.addEventListener('mousedown', e => {
+            if (!_animDone || e.button !== 0) return;
+            _dragStart = containerPos(e);
+            _dragCurrent = _dragStart;
+            _dragging = false;
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (!_dragStart) return;
+            _dragCurrent = containerPos(e);
+            const dx = _dragCurrent.x - _dragStart.x;
+            const dy = _dragCurrent.y - _dragStart.y;
+            if (!_dragging && Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
+                _dragging = true;
+                container.classList.add('selecting');
+                hideTooltip();
+                hoveredIdx = -1;
+                window._drawPLGraph();
+            }
+            if (_dragging) {
+                const sx = Math.min(_dragStart.x, _dragCurrent.x);
+                const sy = Math.min(_dragStart.y, _dragCurrent.y);
+                const sw = Math.abs(dx);
+                const sh = Math.abs(dy);
+                selRect.style.left = sx + 'px';
+                selRect.style.top = sy + 'px';
+                selRect.style.width = sw + 'px';
+                selRect.style.height = sh + 'px';
+                selRect.classList.add('active');
+            }
+        });
+
+        window.addEventListener('mouseup', e => {
+            if (!_dragStart) return;
+            const wasReal = _dragging;
+            const startPt = _dragStart;
+            const endPt = containerPos(e);
+            _dragStart = null;
+            _dragging = false;
+            container.classList.remove('selecting');
+            selRect.classList.remove('active');
+
+            if (wasReal) {
+                captureSelection(startPt, endPt);
+            }
+        });
+
+        function captureSelection(p1, p2) {
+            const cRect = canvas.getBoundingClientRect();
+            const contRect = container.getBoundingClientRect();
+            const offX = cRect.left - contRect.left;
+            const offY = cRect.top - contRect.top;
+
+            /* Selection coords relative to the canvas element */
+            let sx = Math.min(p1.x, p2.x) - offX;
+            let sy = Math.min(p1.y, p2.y) - offY;
+            let sw = Math.abs(p2.x - p1.x);
+            let sh = Math.abs(p2.y - p1.y);
+
+            /* Clamp to canvas bounds */
+            if (sx < 0) { sw += sx; sx = 0; }
+            if (sy < 0) { sh += sy; sy = 0; }
+            sw = Math.min(sw, cRect.width - sx);
+            sh = Math.min(sh, cRect.height - sy);
+            if (sw < 10 || sh < 10) return;
+
+            /* Scale to actual canvas pixels (DPR) */
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width  = sw * dpr;
+            cropCanvas.height = sh * dpr;
+            const cropCtx = cropCanvas.getContext('2d');
+            cropCtx.drawImage(canvas,
+                sx * dpr, sy * dpr, sw * dpr, sh * dpr,
+                0, 0, sw * dpr, sh * dpr
+            );
+            const dataUrl = cropCanvas.toDataURL('image/png');
+            openScreenshotModal(dataUrl);
+        }
+
+        /* ── Screenshot Modal ────────────────────────────── */
+        function openScreenshotModal(imgSrc) {
+            /* Remove any existing modal */
+            const old = document.getElementById('graphScreenshotOverlay');
+            if (old) old.remove();
+
+            let zoom = 1;
+            const ZOOM_STEP = 0.25;
+            const ZOOM_MIN = 0.25;
+            const ZOOM_MAX = 5;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'graph-screenshot-overlay';
+            overlay.id = 'graphScreenshotOverlay';
+
+            const modal = document.createElement('div');
+            modal.className = 'graph-screenshot-modal';
+
+            /* Toolbar */
+            const toolbar = document.createElement('div');
+            toolbar.className = 'graph-screenshot-toolbar';
+            toolbar.innerHTML =
+                '<span class="ss-title">Graph Screenshot</span>'
+              + '<button class="graph-screenshot-btn" id="ssZoomOut" title="Zoom Out">&#x2212;</button>'
+              + '<span class="graph-screenshot-zoom-info" id="ssZoomLbl">100%</span>'
+              + '<button class="graph-screenshot-btn" id="ssZoomIn" title="Zoom In">&#x2b;</button>'
+              + '<button class="graph-screenshot-btn" id="ssZoomFit" title="Fit">Fit</button>'
+              + '<button class="graph-screenshot-btn primary" id="ssDownload" title="Download PNG">&#x21E9; Download</button>'
+              + '<button class="graph-screenshot-btn close-btn" id="ssClose" title="Close">&times;</button>';
+
+            /* Viewport */
+            const viewport = document.createElement('div');
+            viewport.className = 'graph-screenshot-viewport';
+            const img = document.createElement('img');
+            img.src = imgSrc;
+            img.draggable = false;
+            viewport.appendChild(img);
+
+            modal.appendChild(toolbar);
+            modal.appendChild(viewport);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            /* Animate in */
+            requestAnimationFrame(() => overlay.classList.add('visible'));
+
+            function updateZoom() {
+                img.style.transform = 'scale(' + zoom + ')';
+                document.getElementById('ssZoomLbl').textContent = Math.round(zoom * 100) + '%';
+            }
+
+            toolbar.querySelector('#ssZoomIn').addEventListener('click', () => {
+                zoom = Math.min(zoom + ZOOM_STEP, ZOOM_MAX);
+                updateZoom();
+            });
+            toolbar.querySelector('#ssZoomOut').addEventListener('click', () => {
+                zoom = Math.max(zoom - ZOOM_STEP, ZOOM_MIN);
+                updateZoom();
+            });
+            toolbar.querySelector('#ssZoomFit').addEventListener('click', () => {
+                zoom = 1;
+                updateZoom();
+            });
+            toolbar.querySelector('#ssDownload').addEventListener('click', () => {
+                const a = document.createElement('a');
+                a.href = imgSrc;
+                a.download = 'graph-screenshot-' + Date.now() + '.png';
+                a.click();
+            });
+
+            /* Zoom with mouse wheel inside viewport */
+            viewport.addEventListener('wheel', e => {
+                e.preventDefault();
+                if (e.deltaY < 0) zoom = Math.min(zoom + ZOOM_STEP, ZOOM_MAX);
+                else zoom = Math.max(zoom - ZOOM_STEP, ZOOM_MIN);
+                updateZoom();
+            }, { passive: false });
+
+            /* Close */
+            function closeModal() {
+                overlay.classList.remove('visible');
+                setTimeout(() => overlay.remove(), 200);
+            }
+            toolbar.querySelector('#ssClose').addEventListener('click', closeModal);
+            overlay.addEventListener('click', e => {
+                if (e.target === overlay) closeModal();
+            });
+            document.addEventListener('keydown', function escHandler(e) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            });
+        }
 
         /* Initial draw with animation */
         animateEntry();
