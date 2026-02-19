@@ -581,7 +581,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 form.style.margin = '0';
 
                 [['_csrf', csrfToken], ['cmc_id', coin.id], ['symbol', coin.symbol],
-                 ['name', coin.name], ['slug', coin.slug || '']].forEach(([n, v]) => {
+                 ['name', coin.name], ['slug', coin.slug || ''],
+                 ['coinlore_id', coin.coinlore_id || ''], ['coingecko_id', coin.coingecko_id || '']].forEach(([n, v]) => {
                     const inp = document.createElement('input');
                     inp.type = 'hidden'; inp.name = n; inp.value = v;
                     form.appendChild(inp);

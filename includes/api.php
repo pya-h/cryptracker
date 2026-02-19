@@ -63,6 +63,169 @@ function geckoCoinListCacheFile(): string
     return $base . '/database/coingecko_list_cache.json';
 }
 
+function cmcMapCacheFile(): string
+{
+    $base = defined('APP_BASE_PATH') ? APP_BASE_PATH : dirname(__DIR__);
+    return $base . '/database/cmc_map_cache.json';
+}
+
+function cmcGetAllMap(): array
+{
+    static $mem = null;
+    if ($mem !== null) return $mem;
+
+    if (CMC_API_KEY === '') {
+        $mem = [];
+        return $mem;
+    }
+
+    $cacheFile = cmcMapCacheFile();
+    $cacheDir = dirname($cacheFile);
+    if (!is_dir($cacheDir)) mkdir($cacheDir, 0755, true);
+
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 43200) {
+        $mem = json_decode(file_get_contents($cacheFile), true) ?: [];
+        if (!empty($mem)) return $mem;
+    }
+
+    $data = cmcRequest('/v1/cryptocurrency/map', ['sort' => 'cmc_rank', 'limit' => 5000]);
+    if (!is_array($data) || empty($data)) {
+        $mem = [];
+        return $mem;
+    }
+
+    file_put_contents($cacheFile, json_encode($data), LOCK_EX);
+    $mem = $data;
+    return $mem;
+}
+
+function tokenLookupIndexes(): array
+{
+    static $idx = null;
+    if ($idx !== null) return $idx;
+
+    $coinlore = coinloreGetAll();
+    $gecko = geckoGetCoinList();
+    $cmc = cmcGetAllMap();
+
+    $coinloreBySlug = [];
+    $coinloreBySymName = [];
+    foreach ($coinlore as $coin) {
+        $slug = strtolower((string) ($coin['nameid'] ?? ''));
+        $sym = strtolower((string) ($coin['symbol'] ?? ''));
+        $name = strtolower((string) ($coin['name'] ?? ''));
+        $id = (int) ($coin['id'] ?? 0);
+        if ($slug !== '') $coinloreBySlug[$slug] = $id;
+        if ($sym !== '' && $name !== '') $coinloreBySymName[$sym . '|' . $name] = $id;
+    }
+
+    $geckoBySlug = [];
+    $geckoBySymName = [];
+    foreach ($gecko as $coin) {
+        $slug = strtolower((string) ($coin['id'] ?? ''));
+        $sym = strtolower((string) ($coin['symbol'] ?? ''));
+        $name = strtolower((string) ($coin['name'] ?? ''));
+        if ($slug !== '') $geckoBySlug[$slug] = $slug;
+        if ($sym !== '' && $name !== '') $geckoBySymName[$sym . '|' . $name] = $slug;
+    }
+
+    $cmcBySlug = [];
+    $cmcBySymName = [];
+    $cmcById = [];
+    foreach ($cmc as $coin) {
+        $id = (int) ($coin['id'] ?? 0);
+        if ($id <= 0) continue;
+        $slug = strtolower((string) ($coin['slug'] ?? ''));
+        $sym = strtolower((string) ($coin['symbol'] ?? ''));
+        $name = strtolower((string) ($coin['name'] ?? ''));
+        if ($slug !== '') $cmcBySlug[$slug] = $id;
+        if ($sym !== '' && $name !== '') $cmcBySymName[$sym . '|' . $name] = $id;
+        $cmcById[$id] = ['slug' => $slug, 'symbol' => $sym, 'name' => $name];
+    }
+
+    $idx = [
+        'coinlore_slug' => $coinloreBySlug,
+        'coinlore_sym_name' => $coinloreBySymName,
+        'gecko_slug' => $geckoBySlug,
+        'gecko_sym_name' => $geckoBySymName,
+        'cmc_slug' => $cmcBySlug,
+        'cmc_sym_name' => $cmcBySymName,
+        'cmc_by_id' => $cmcById,
+    ];
+
+    return $idx;
+}
+
+function resolveProviderIdsForToken(int $cmcId, string $symbol, string $name, string $slug, ?int $coinloreHint = null, ?string $coingeckoHint = null): array
+{
+    $idx = tokenLookupIndexes();
+
+    $symbol = strtolower(trim($symbol));
+    $name = strtolower(trim($name));
+    $slug = strtolower(trim($slug));
+
+    if (($slug === '' || $symbol === '' || $name === '') && isset($idx['cmc_by_id'][$cmcId])) {
+        $meta = $idx['cmc_by_id'][$cmcId];
+        $slug = $slug !== '' ? $slug : (string) ($meta['slug'] ?? '');
+        $symbol = $symbol !== '' ? $symbol : (string) ($meta['symbol'] ?? '');
+        $name = $name !== '' ? $name : (string) ($meta['name'] ?? '');
+    }
+
+    $key = ($symbol !== '' && $name !== '') ? ($symbol . '|' . $name) : '';
+
+    $coinloreId = ($coinloreHint !== null && $coinloreHint > 0) ? $coinloreHint : null;
+    if ($coinloreId === null) {
+        if ($slug !== '' && isset($idx['coinlore_slug'][$slug])) {
+            $coinloreId = (int) $idx['coinlore_slug'][$slug];
+        } elseif ($key !== '' && isset($idx['coinlore_sym_name'][$key])) {
+            $coinloreId = (int) $idx['coinlore_sym_name'][$key];
+        }
+    }
+
+    $coingeckoId = $coingeckoHint !== null ? strtolower(trim($coingeckoHint)) : null;
+    if ($coingeckoId === '') $coingeckoId = null;
+    if ($coingeckoId === null) {
+        if ($slug !== '' && isset($idx['gecko_slug'][$slug])) {
+            $coingeckoId = (string) $idx['gecko_slug'][$slug];
+        } elseif ($key !== '' && isset($idx['gecko_sym_name'][$key])) {
+            $coingeckoId = (string) $idx['gecko_sym_name'][$key];
+        }
+    }
+
+    return [
+        'coinlore_id' => $coinloreId,
+        'coingecko_id' => $coingeckoId,
+    ];
+}
+
+function resolveCmcIdByMeta(string $symbol, string $name, string $slug): ?int
+{
+    $idx = tokenLookupIndexes();
+
+    $symbol = strtolower(trim($symbol));
+    $name = strtolower(trim($name));
+    $slug = strtolower(trim($slug));
+
+    if ($slug !== '' && isset($idx['cmc_slug'][$slug])) {
+        return (int) $idx['cmc_slug'][$slug];
+    }
+
+    $key = ($symbol !== '' && $name !== '') ? ($symbol . '|' . $name) : '';
+    if ($key !== '' && isset($idx['cmc_sym_name'][$key])) {
+        return (int) $idx['cmc_sym_name'][$key];
+    }
+
+    return null;
+}
+
+function dbSourceMappingsByCmcIds(array $cmcIds): array
+{
+    if (function_exists('dbGetTokenSourceMappingsByCmcIds')) {
+        return dbGetTokenSourceMappingsByCmcIds($cmcIds);
+    }
+    return [];
+}
+
 function httpGet(string $url, array $extraHeaders = [], int $timeout = 15): ?string
 {
     $headers = "Accept: application/json\r\n";
@@ -184,12 +347,27 @@ function coinloreSearch(string $query): array
     return $result;
 }
 
-function coinloreGetQuotes(array $ids): array
+function coinloreGetQuotes(array $cmcIds): array
 {
-    if (empty($ids)) return [];
+    if (empty($cmcIds)) return [];
 
-    $ids = array_map('intval', $ids);
-    $raw = httpGet("https://api.coinlore.net/api/ticker/?id=" . implode(',', $ids));
+    $cmcIds = array_values(array_unique(array_map('intval', $cmcIds)));
+    $cmcIds = array_values(array_filter($cmcIds, fn($id) => $id > 0));
+    if (empty($cmcIds)) return [];
+
+    $mappings = dbSourceMappingsByCmcIds($cmcIds);
+
+    $coinloreToCmc = [];
+    foreach ($cmcIds as $cmcId) {
+        $coinloreId = $mappings[$cmcId]['coinlore_id'] ?? null;
+        if ($coinloreId === null || (int) $coinloreId <= 0) {
+            $coinloreId = $cmcId;
+        }
+        $coinloreToCmc[(int) $coinloreId] = $cmcId;
+    }
+
+    $providerIds = array_keys($coinloreToCmc);
+    $raw = httpGet("https://api.coinlore.net/api/ticker/?id=" . implode(',', $providerIds));
     if (!$raw) return [];
 
     $coins = json_decode($raw, true);
@@ -197,7 +375,11 @@ function coinloreGetQuotes(array $ids): array
 
     $out = [];
     foreach ($coins as $c) {
-        $out[(int)$c['id']] = [
+        $coinloreId = (int) ($c['id'] ?? 0);
+        $cmcId = $coinloreToCmc[$coinloreId] ?? null;
+        if (!$cmcId) continue;
+
+        $out[(int) $cmcId] = [
             'price'              => (float)($c['price_usd'] ?? 0),
             'percent_change_1h'  => (float)($c['percent_change_1h'] ?? 0),
             'percent_change_24h' => (float)($c['percent_change_24h'] ?? 0),
@@ -238,11 +420,22 @@ function cmcSearchCoins(string $query): array
     foreach ($data as $coin) {
         if (str_contains(strtolower($coin['name'] ?? ''), $query) ||
             str_contains(strtolower($coin['symbol'] ?? ''), $query)) {
+            $cmcId = (int) ($coin['id'] ?? 0);
+            if ($cmcId <= 0) continue;
+            $resolved = resolveProviderIdsForToken(
+                $cmcId,
+                (string) ($coin['symbol'] ?? ''),
+                (string) ($coin['name'] ?? ''),
+                (string) ($coin['slug'] ?? '')
+            );
+
             $result[] = [
-                'id'     => $coin['id'],
-                'name'   => $coin['name'],
-                'symbol' => $coin['symbol'],
-                'slug'   => $coin['slug'] ?? '',
+                'id'     => $cmcId,
+                'name'   => (string) ($coin['name'] ?? ''),
+                'symbol' => strtoupper((string) ($coin['symbol'] ?? '')),
+                'slug'   => (string) ($coin['slug'] ?? ''),
+                'coinlore_id' => $resolved['coinlore_id'] ?? null,
+                'coingecko_id' => $resolved['coingecko_id'] ?? null,
             ];
         }
         if (count($result) >= 20) break;
@@ -283,57 +476,12 @@ function geckoCmcMap(): array
     static $map = null;
     if ($map !== null) return $map;
 
-    $coinlore = coinloreGetAll();
-    $gecko = geckoGetCoinList();
-    if (empty($coinlore) || empty($gecko)) {
-        $map = [];
-        return $map;
-    }
-
-    $geckoById = [];
-    $geckoBySymbol = [];
-    foreach ($gecko as $entry) {
-        $gid = strtolower((string) ($entry['id'] ?? ''));
-        $gs = strtolower((string) ($entry['symbol'] ?? ''));
-        if ($gid === '') continue;
-        $geckoById[$gid] = $entry;
-        if ($gs !== '') {
-            $geckoBySymbol[$gs][] = $entry;
-        }
-    }
-
+    $idx = tokenLookupIndexes();
     $map = [];
-    foreach ($coinlore as $coin) {
-        $cmcId = (int) ($coin['id'] ?? 0);
-        if ($cmcId <= 0) continue;
-
-        $slug = strtolower((string) ($coin['nameid'] ?? ''));
-        $symbol = strtolower((string) ($coin['symbol'] ?? ''));
-        $name = strtolower((string) ($coin['name'] ?? ''));
-
-        $selected = null;
-
-        if ($slug !== '' && isset($geckoById[$slug])) {
-            $selected = $slug;
-        } elseif ($symbol !== '' && !empty($geckoBySymbol[$symbol])) {
-            $cands = $geckoBySymbol[$symbol];
-            if (count($cands) === 1) {
-                $selected = strtolower((string) $cands[0]['id']);
-            } else {
-                foreach ($cands as $cand) {
-                    if (strtolower((string) ($cand['name'] ?? '')) === $name) {
-                        $selected = strtolower((string) $cand['id']);
-                        break;
-                    }
-                }
-                if ($selected === null) {
-                    $selected = strtolower((string) $cands[0]['id']);
-                }
-            }
-        }
-
-        if ($selected !== null && $selected !== '') {
-            $map[$cmcId] = $selected;
+    foreach (($idx['cmc_by_id'] ?? []) as $cmcId => $meta) {
+        $resolved = resolveProviderIdsForToken((int) $cmcId, (string) ($meta['symbol'] ?? ''), (string) ($meta['name'] ?? ''), (string) ($meta['slug'] ?? ''), null, null);
+        if (!empty($resolved['coingecko_id'])) {
+            $map[(int) $cmcId] = (string) $resolved['coingecko_id'];
         }
     }
 
@@ -346,10 +494,11 @@ function geckoGetQuotes(array $cmcIds): array
 
     $cmcIds = array_values(array_unique(array_map('intval', $cmcIds)));
     $cmcToGecko = geckoCmcMap();
+    $mappings = dbSourceMappingsByCmcIds($cmcIds);
 
     $geckoToCmc = [];
     foreach ($cmcIds as $cmcId) {
-        $gid = $cmcToGecko[$cmcId] ?? null;
+        $gid = $mappings[$cmcId]['coingecko_id'] ?? ($cmcToGecko[$cmcId] ?? null);
         if ($gid) $geckoToCmc[$gid] = $cmcId;
     }
 
@@ -512,20 +661,26 @@ function geckoSearchCoins(string $query): array
     $coins = $json['coins'] ?? [];
     if (!is_array($coins) || empty($coins)) return [];
 
-    $cmcToGecko = geckoCmcMap();
-    $geckoToCmc = array_flip($cmcToGecko);
-
     $result = [];
     foreach ($coins as $coin) {
         $gid = strtolower((string) ($coin['id'] ?? ''));
-        $cmcId = $geckoToCmc[$gid] ?? null;
-        if (!$cmcId) continue;
+        if ($gid === '') continue;
+        $name = (string) ($coin['name'] ?? '');
+        $symbol = strtoupper((string) ($coin['symbol'] ?? ''));
+        $slug = $gid;
+
+        $cmcId = resolveCmcIdByMeta($symbol, $name, $slug);
+        if ($cmcId === null) continue;
+
+        $resolved = resolveProviderIdsForToken((int) $cmcId, $symbol, $name, $slug, null, $gid);
 
         $result[] = [
             'id' => (int) $cmcId,
-            'name' => (string) ($coin['name'] ?? ''),
-            'symbol' => strtoupper((string) ($coin['symbol'] ?? '')),
-            'slug' => (string) ($coin['id'] ?? ''),
+            'name' => $name,
+            'symbol' => $symbol,
+            'slug' => $slug,
+            'coinlore_id' => $resolved['coinlore_id'] ?? null,
+            'coingecko_id' => $gid,
         ];
 
         if (count($result) >= 20) break;
@@ -544,7 +699,59 @@ function apiSearchCoins(string $query): array
             'coingecko' => geckoSearchCoins($query),
             default => [],
         };
-        if (!empty($results)) return $results;
+        if (!empty($results)) {
+            $out = [];
+            foreach ($results as $row) {
+                $name = (string) ($row['name'] ?? '');
+                $symbol = strtoupper((string) ($row['symbol'] ?? ''));
+                $slug = (string) ($row['slug'] ?? '');
+                $cmcId = 0;
+
+                if ($source === 'coinmarketcap') {
+                    $cmcId = (int) ($row['id'] ?? 0);
+                } elseif ($source === 'coinlore') {
+                    $cmcId = resolveCmcIdByMeta($symbol, $name, $slug) ?? 0;
+                    if ($cmcId <= 0) {
+                        $cmcId = (int) ($row['id'] ?? 0);
+                    }
+                } else {
+                    $cmcId = (int) ($row['id'] ?? 0);
+                }
+
+                if ($cmcId <= 0) continue;
+
+                $coinloreHint = null;
+                if ($source === 'coinlore') {
+                    $coinloreHint = (int) ($row['id'] ?? 0);
+                    if ($coinloreHint <= 0) $coinloreHint = null;
+                } elseif (isset($row['coinlore_id'])) {
+                    $coinloreHint = (int) $row['coinlore_id'];
+                    if ($coinloreHint <= 0) $coinloreHint = null;
+                }
+
+                $coingeckoHint = null;
+                if ($source === 'coingecko') {
+                    $coingeckoHint = (string) ($row['slug'] ?? '');
+                } elseif (isset($row['coingecko_id'])) {
+                    $coingeckoHint = (string) $row['coingecko_id'];
+                }
+
+                $resolved = resolveProviderIdsForToken($cmcId, $symbol, $name, $slug, $coinloreHint, $coingeckoHint);
+
+                $out[] = [
+                    'id' => $cmcId,
+                    'name' => $name,
+                    'symbol' => $symbol,
+                    'slug' => $slug,
+                    'coinlore_id' => $resolved['coinlore_id'] ?? null,
+                    'coingecko_id' => $resolved['coingecko_id'] ?? null,
+                ];
+
+                if (count($out) >= 20) break;
+            }
+
+            if (!empty($out)) return $out;
+        }
     }
     return [];
 }

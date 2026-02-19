@@ -71,6 +71,10 @@ function dbGetUserTokens(int $userId): array
 {
     $tokens = readTable('user_tokens');
     $result = array_filter($tokens, fn($t) => $t['user_id'] === $userId);
+    foreach ($result as &$t) {
+        if (!array_key_exists('coinlore_id', $t)) $t['coinlore_id'] = null;
+        if (!array_key_exists('coingecko_id', $t)) $t['coingecko_id'] = null;
+    }
     usort($result, fn($a, $b) => strcmp($b['added_at'], $a['added_at']));
     return array_values($result);
 }
@@ -78,7 +82,11 @@ function dbGetUserTokens(int $userId): array
 function dbGetUserToken(int $tokenId, int $userId): ?array
 {
     foreach (readTable('user_tokens') as $t) {
-        if ($t['id'] === $tokenId && $t['user_id'] === $userId) return $t;
+        if ($t['id'] === $tokenId && $t['user_id'] === $userId) {
+            if (!array_key_exists('coinlore_id', $t)) $t['coinlore_id'] = null;
+            if (!array_key_exists('coingecko_id', $t)) $t['coingecko_id'] = null;
+            return $t;
+        }
     }
     return null;
 }
@@ -86,15 +94,24 @@ function dbGetUserToken(int $tokenId, int $userId): ?array
 function dbGetUserTokenByCmc(int $userId, int $cmcId): ?array
 {
     foreach (readTable('user_tokens') as $t) {
-        if ($t['user_id'] === $userId && $t['cmc_id'] === $cmcId) return $t;
+        if ($t['user_id'] === $userId && $t['cmc_id'] === $cmcId) {
+            if (!array_key_exists('coinlore_id', $t)) $t['coinlore_id'] = null;
+            if (!array_key_exists('coingecko_id', $t)) $t['coingecko_id'] = null;
+            return $t;
+        }
     }
     return null;
 }
 
-function dbInsertUserToken(int $userId, int $cmcId, string $symbol, string $name, string $slug): int
+function dbInsertUserToken(int $userId, int $cmcId, string $symbol, string $name, string $slug, ?int $coinloreId = null, ?string $coingeckoId = null): int
 {
     $tokens = readTable('user_tokens');
     $id     = nextId($tokens);
+
+    $coinloreId = ($coinloreId !== null && $coinloreId > 0) ? $coinloreId : null;
+    $coingeckoId = $coingeckoId !== null ? strtolower(trim($coingeckoId)) : null;
+    if ($coingeckoId === '') $coingeckoId = null;
+
     $tokens[] = [
         'id'       => $id,
         'user_id'  => $userId,
@@ -102,10 +119,61 @@ function dbInsertUserToken(int $userId, int $cmcId, string $symbol, string $name
         'symbol'   => $symbol,
         'name'     => $name,
         'slug'     => $slug,
+        'coinlore_id' => $coinloreId,
+        'coingecko_id' => $coingeckoId,
         'added_at' => date('Y-m-d H:i:s'),
     ];
     writeTable('user_tokens', $tokens);
     return $id;
+}
+
+function dbSetTokenSourceMappings(int $tokenId, ?int $coinloreId, ?string $coingeckoId): bool
+{
+    $tokens = readTable('user_tokens');
+    $updated = false;
+
+    $coinloreId = ($coinloreId !== null && $coinloreId > 0) ? $coinloreId : null;
+    $coingeckoId = $coingeckoId !== null ? strtolower(trim($coingeckoId)) : null;
+    if ($coingeckoId === '') $coingeckoId = null;
+
+    foreach ($tokens as &$t) {
+        if ($t['id'] === $tokenId) {
+            $t['coinlore_id'] = $coinloreId;
+            $t['coingecko_id'] = $coingeckoId;
+            $updated = true;
+            break;
+        }
+    }
+
+    if ($updated) {
+        writeTable('user_tokens', $tokens);
+    }
+
+    return $updated;
+}
+
+function dbGetTokenSourceMappingsByCmcIds(array $cmcIds): array
+{
+    $cmcSet = array_flip(array_map('intval', $cmcIds));
+    if (empty($cmcSet)) return [];
+
+    $out = [];
+    foreach (readTable('user_tokens') as $t) {
+        $cmcId = (int) ($t['cmc_id'] ?? 0);
+        if ($cmcId <= 0 || !isset($cmcSet[$cmcId]) || isset($out[$cmcId])) continue;
+
+        $coinloreId = isset($t['coinlore_id']) ? (int) $t['coinlore_id'] : null;
+        if ($coinloreId !== null && $coinloreId <= 0) $coinloreId = null;
+        $coingeckoId = isset($t['coingecko_id']) ? strtolower(trim((string) $t['coingecko_id'])) : null;
+        if ($coingeckoId === '') $coingeckoId = null;
+
+        $out[$cmcId] = [
+            'coinlore_id' => $coinloreId,
+            'coingecko_id' => $coingeckoId,
+        ];
+    }
+
+    return $out;
 }
 
 function dbDeleteUserToken(int $tokenId): void

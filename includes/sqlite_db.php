@@ -56,6 +56,20 @@ function dbEnsureSchema(PDO $pdo): void
     $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_user_tokens_user_cmc ON user_tokens(user_id, cmc_id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_user_tokens_user ON user_tokens(user_id)');
 
+    $colStmt = $pdo->query("PRAGMA table_info(user_tokens)");
+    $columns = $colStmt ? $colStmt->fetchAll() : [];
+    $existing = [];
+    foreach ($columns as $col) {
+        $existing[(string) ($col['name'] ?? '')] = true;
+    }
+
+    if (!isset($existing['coinlore_id'])) {
+        $pdo->exec('ALTER TABLE user_tokens ADD COLUMN coinlore_id INTEGER NULL');
+    }
+    if (!isset($existing['coingecko_id'])) {
+        $pdo->exec('ALTER TABLE user_tokens ADD COLUMN coingecko_id TEXT NULL');
+    }
+
     $pdo->exec('CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_token_id INTEGER NOT NULL,
@@ -112,14 +126,14 @@ function dbInsertUser(string $username, string $email, string $hash): int
 
 function dbGetUserTokens(int $userId): array
 {
-    $stmt = dbPdo()->prepare('SELECT * FROM user_tokens WHERE user_id = :u ORDER BY added_at DESC');
+    $stmt = dbPdo()->prepare('SELECT *, coinlore_id, coingecko_id FROM user_tokens WHERE user_id = :u ORDER BY added_at DESC');
     $stmt->execute([':u' => $userId]);
     return $stmt->fetchAll();
 }
 
 function dbGetUserToken(int $tokenId, int $userId): ?array
 {
-    $stmt = dbPdo()->prepare('SELECT * FROM user_tokens WHERE id = :id AND user_id = :uid LIMIT 1');
+    $stmt = dbPdo()->prepare('SELECT *, coinlore_id, coingecko_id FROM user_tokens WHERE id = :id AND user_id = :uid LIMIT 1');
     $stmt->execute([':id' => $tokenId, ':uid' => $userId]);
     $row = $stmt->fetch();
     return $row ?: null;
@@ -127,24 +141,77 @@ function dbGetUserToken(int $tokenId, int $userId): ?array
 
 function dbGetUserTokenByCmc(int $userId, int $cmcId): ?array
 {
-    $stmt = dbPdo()->prepare('SELECT * FROM user_tokens WHERE user_id = :uid AND cmc_id = :cmc LIMIT 1');
+    $stmt = dbPdo()->prepare('SELECT *, coinlore_id, coingecko_id FROM user_tokens WHERE user_id = :uid AND cmc_id = :cmc LIMIT 1');
     $stmt->execute([':uid' => $userId, ':cmc' => $cmcId]);
     $row = $stmt->fetch();
     return $row ?: null;
 }
 
-function dbInsertUserToken(int $userId, int $cmcId, string $symbol, string $name, string $slug): int
+function dbInsertUserToken(int $userId, int $cmcId, string $symbol, string $name, string $slug, ?int $coinloreId = null, ?string $coingeckoId = null): int
 {
-    $stmt = dbPdo()->prepare('INSERT INTO user_tokens (user_id, cmc_id, symbol, name, slug, added_at) VALUES (:uid, :cmc, :s, :n, :sl, :a)');
+    $coinloreId = ($coinloreId !== null && $coinloreId > 0) ? $coinloreId : null;
+    $coingeckoId = $coingeckoId !== null ? strtolower(trim($coingeckoId)) : null;
+    if ($coingeckoId === '') $coingeckoId = null;
+
+    $stmt = dbPdo()->prepare('INSERT INTO user_tokens (user_id, cmc_id, symbol, name, slug, coinlore_id, coingecko_id, added_at) VALUES (:uid, :cmc, :s, :n, :sl, :clid, :gid, :a)');
     $stmt->execute([
         ':uid' => $userId,
         ':cmc' => $cmcId,
         ':s' => $symbol,
         ':n' => $name,
         ':sl' => $slug,
+        ':clid' => $coinloreId,
+        ':gid' => $coingeckoId,
         ':a' => date('Y-m-d H:i:s'),
     ]);
     return (int) dbPdo()->lastInsertId();
+}
+
+function dbSetTokenSourceMappings(int $tokenId, ?int $coinloreId, ?string $coingeckoId): bool
+{
+    $coinloreId = ($coinloreId !== null && $coinloreId > 0) ? $coinloreId : null;
+    $coingeckoId = $coingeckoId !== null ? strtolower(trim($coingeckoId)) : null;
+    if ($coingeckoId === '') $coingeckoId = null;
+
+    $stmt = dbPdo()->prepare('UPDATE user_tokens SET coinlore_id = :clid, coingecko_id = :gid WHERE id = :id');
+    $stmt->execute([
+        ':clid' => $coinloreId,
+        ':gid' => $coingeckoId,
+        ':id' => $tokenId,
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
+
+function dbGetTokenSourceMappingsByCmcIds(array $cmcIds): array
+{
+    $cmcIds = array_values(array_unique(array_map('intval', $cmcIds)));
+    $cmcIds = array_values(array_filter($cmcIds, fn($id) => $id > 0));
+    if (empty($cmcIds)) return [];
+
+    $ph = implode(',', array_fill(0, count($cmcIds), '?'));
+    $stmt = dbPdo()->prepare('SELECT cmc_id, coinlore_id, coingecko_id FROM user_tokens WHERE cmc_id IN (' . $ph . ') GROUP BY cmc_id');
+    $stmt->execute($cmcIds);
+
+    $rows = $stmt->fetchAll();
+    $out = [];
+    foreach ($rows as $row) {
+        $cmcId = (int) ($row['cmc_id'] ?? 0);
+        if ($cmcId <= 0) continue;
+
+        $coinloreId = isset($row['coinlore_id']) && $row['coinlore_id'] !== null ? (int) $row['coinlore_id'] : null;
+        if ($coinloreId !== null && $coinloreId <= 0) $coinloreId = null;
+
+        $coingeckoId = isset($row['coingecko_id']) ? strtolower(trim((string) $row['coingecko_id'])) : null;
+        if ($coingeckoId === '') $coingeckoId = null;
+
+        $out[$cmcId] = [
+            'coinlore_id' => $coinloreId,
+            'coingecko_id' => $coingeckoId,
+        ];
+    }
+
+    return $out;
 }
 
 function dbDeleteUserToken(int $tokenId): void
