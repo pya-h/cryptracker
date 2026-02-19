@@ -14,7 +14,7 @@ $quotes = $cmcIds ? apiGetQuotes($cmcIds) : [];
 $mode = plMode();
 $summaries     = [];
 $totalRealPL   = 0;
-$totalImagPL   = 0;
+$totalUnrealPL = 0;
 $totalInvested = 0;
 
 foreach ($tokens as $tk) {
@@ -39,19 +39,19 @@ foreach ($tokens as $tk) {
     ];
 
     $totalRealPL   += $pl['realized_pl'];
-    $totalImagPL   += $pl['unrealized_pl'];
+    $totalUnrealPL += $pl['unrealized_pl'];
     $totalInvested += $pl['cost_basis'];
 }
 
-$totalPL = $totalRealPL + $totalImagPL;
-
-$tblPrec = min(precision(), 6);
+$totalPL = $totalRealPL + $totalUnrealPL;
 
 layoutHead('Dashboard');
 layoutNav($user);
 ?>
 
-    <main class="container" data-page="dashboard">
+    <main class="container" data-page="dashboard"
+          data-precision="<?= precision() ?>"
+          data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>">
 
         <?= renderFlashes() ?>
 
@@ -68,8 +68,8 @@ layoutNav($user);
             </div>
             <div class="summary-card stagger-3">
                 <span class="summary-label">Unrealized P/L</span>
-                <span class="summary-value <?= plClass($totalImagPL) ?>" data-countup="<?= $totalImagPL ?>" data-pl="1" data-live="unrealized-total">
-                    <?= formatPL($totalImagPL) ?>
+                <span class="summary-value <?= plClass($totalUnrealPL) ?>" data-countup="<?= $totalUnrealPL ?>" data-pl="1" data-live="unrealized-total">
+                    <?= formatPL($totalUnrealPL) ?>
                 </span>
             </div>
             <div class="summary-card highlight stagger-4">
@@ -118,21 +118,21 @@ layoutNav($user);
                                 <strong><?= e($s['token']['symbol']) ?></strong>
                                 <small><?= e($s['token']['name']) ?></small>
                             </td>
-                            <td data-live="price"><?= formatUSD($s['price'], $tblPrec) ?></td>
+                            <td data-live="price"><?= formatUSD($s['price']) ?></td>
                             <td class="<?= plClass($s['change24']) ?>" data-live="change24">
-                                <?= formatPercent($s['change24'], $tblPrec) ?>
+                                <?= formatPercent($s['change24']) ?>
                             </td>
-                            <td><?= formatCrypto($s['holdings'], $tblPrec) ?></td>
-                            <td><?= formatUSD($s['avgBuy'], $tblPrec) ?></td>
-                            <td data-live="currentVal"><?= formatUSD($s['currentVal'], $tblPrec) ?></td>
+                            <td><?= formatCrypto($s['holdings']) ?></td>
+                            <td><?= formatUSD($s['avgBuy']) ?></td>
+                            <td data-live="currentVal"><?= formatUSD($s['currentVal']) ?></td>
                             <td class="<?= plClass($s['realizedPL']) ?>">
-                                <?= formatPL($s['realizedPL'], $tblPrec) ?>
+                                <?= formatPL($s['realizedPL']) ?>
                             </td>
                             <td class="<?= plClass($s['unrealizedPL']) ?>" data-live="unrealizedPL">
-                                <?= formatPL($s['unrealizedPL'], $tblPrec) ?>
+                                <?= formatPL($s['unrealizedPL']) ?>
                             </td>
                             <td class="<?= plClass($s['totalPL']) ?>" data-live="totalPL">
-                                <?= formatPL($s['totalPL'], $tblPrec) ?>
+                                <?= formatPL($s['totalPL']) ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>

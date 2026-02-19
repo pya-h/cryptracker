@@ -45,12 +45,7 @@ switch ($action) {
         }
         $_SESSION['price_source'] = $src;
         $_SESSION['price_source_fail'] = ['source' => $src, 'count' => 0, 'last_ts' => 0];
-        $label = match ($src) {
-            'coinlore' => 'CoinLore',
-            'coingecko' => 'CoinGecko',
-            default => 'CoinMarketCap',
-        };
-        flash('success', 'Price source changed to ' . $label . '.');
+        flash('success', 'Price source changed to ' . priceSourceLabel($src) . '.');
         break;
 
     case 'username':

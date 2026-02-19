@@ -85,13 +85,19 @@ function formatBigNum(float $v): string
     return trimZeros('$' . number_format($v, $p));
 }
 
+function formatFormValue(float $v): string
+{
+    return rtrim(rtrim(number_format($v, 10, '.', ''), '0'), '.');
+}
+
 function formatSupply(float $v): string
 {
     if ($v <= 0) return '—';
-    if ($v >= 1e12) return number_format($v / 1e12, 2) . 'T';
-    if ($v >= 1e9)  return number_format($v / 1e9, 2) . 'B';
-    if ($v >= 1e6)  return number_format($v / 1e6, 2) . 'M';
-    if ($v >= 1e3)  return number_format($v / 1e3, 2) . 'K';
+    $p = precision();
+    if ($v >= 1e12) return trimZeros(number_format($v / 1e12, $p)) . 'T';
+    if ($v >= 1e9)  return trimZeros(number_format($v / 1e9, $p)) . 'B';
+    if ($v >= 1e6)  return trimZeros(number_format($v / 1e6, $p)) . 'M';
+    if ($v >= 1e3)  return trimZeros(number_format($v / 1e3, $p)) . 'K';
     return number_format($v, 0);
 }
 
@@ -107,12 +113,12 @@ function plMode(): string
 
 function precision(): int
 {
-    return (int) ($_SESSION['precision'] ?? 2);
+    return (int) ($_SESSION['precision'] ?? 3);
 }
 
 function worthlessZeros(): bool
 {
-    return (bool) ($_SESSION['worthless_zeros'] ?? true);
+    return (bool) ($_SESSION['worthless_zeros'] ?? false);
 }
 
 function trimZeros(string $s): string

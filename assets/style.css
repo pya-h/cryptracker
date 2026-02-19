@@ -104,6 +104,17 @@ a:hover { color: var(--primary-h); }
     100% { background-color: transparent; }
 }
 
+@keyframes ripple {
+    0%   { transform: translate(-50%, -50%) scale(0); opacity: .35; }
+    100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+
+@keyframes subtleBounce {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.04); }
+    100% { transform: scale(1); }
+}
+
 .live-flash {
     animation: liveFlash .6s ease-out;
     border-radius: 4px;
@@ -323,12 +334,14 @@ a:hover { color: var(--primary-h); }
 
 .modal-overlay {
     display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+    background: rgba(0,0,0,.6); backdrop-filter: blur(6px);
     z-index: 500; justify-content: center; align-items: center;
     padding: 1rem;
+    transition: opacity .25s ease;
+    opacity: 0;
 }
 
-.modal-overlay.open { display: flex; }
+.modal-overlay.open { display: flex; opacity: 1; }
 
 .modal {
     background: var(--bg-card-solid);
@@ -449,6 +462,15 @@ a:focus-visible {
 .btn:hover { transform: translateY(-2px); }
 .btn:active { transform: translateY(0) scale(.98); }
 
+.btn::before {
+    content: ''; position: absolute;
+    width: 100%; height: 100%;
+    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,.25) 0%, transparent 70%);
+    opacity: 0; transition: opacity .4s ease;
+    pointer-events: none;
+}
+.btn:active::before { opacity: 1; }
+
 .btn::after {
     content: ''; position: absolute; inset: 0;
     background: rgba(255,255,255,.15);
@@ -547,6 +569,7 @@ select {
     border-radius: var(--radius-sm);
     color: var(--text); font-size: .95rem;
     transition: all var(--transition);
+    font-variant-numeric: tabular-nums;
 }
 
 select {
@@ -568,6 +591,7 @@ input:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px var(--primary-glow);
+    transform: translateY(-1px);
 }
 
 input::placeholder { color: var(--text-muted); opacity: .5; }
@@ -621,14 +645,14 @@ form .btn { margin-top: 1.2rem; }
     color: var(--text);
     font-size: .84rem;
     line-height: 1.35;
-    transform: translateY(10px);
+    transform: translateY(16px) scale(.96);
     opacity: 0;
-    transition: opacity .2s ease, transform .2s ease;
+    transition: opacity .25s ease, transform .3s cubic-bezier(.34,1.56,.64,1);
 }
 
 .app-toast.show {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
 }
 
 .app-toast-info {
@@ -665,7 +689,7 @@ form .btn { margin-top: 1.2rem; }
     background: linear-gradient(135deg, rgba(124,106,239,.08), transparent);
 }
 
-.summary-card.highlight:hover { box-shadow: 0 0 24px var(--primary-glow); }
+.summary-card.highlight:hover { box-shadow: 0 0 24px var(--primary-glow); border-color: rgba(124,106,239,.45); }
 
 .summary-label {
     font-size: .72rem; font-weight: 600; color: var(--text-muted);
@@ -675,12 +699,14 @@ form .btn { margin-top: 1.2rem; }
 .summary-value {
     font-size: 1.45rem; font-weight: 700; margin-top: .3rem;
     transition: color var(--transition);
+    font-variant-numeric: tabular-nums;
 }
 
 /* ── Profit / Loss colors ────────────────────────────────── */
 
 .profit { color: var(--green) !important; }
 .loss   { color: var(--red) !important; }
+.profit, .loss { transition: color .3s ease; }
 
 /* ── Add Token Section ────────────────────────────────────── */
 
@@ -764,6 +790,7 @@ form .btn { margin-top: 1.2rem; }
     padding: .75rem 1rem;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .token-table td strong { display: block; }
@@ -778,6 +805,10 @@ form .btn { margin-top: 1.2rem; }
 .clickable-row:hover {
     background: rgba(124,106,239,.05);
     box-shadow: inset 3px 0 0 var(--primary);
+}
+.clickable-row:active {
+    transform: scale(.998);
+    opacity: .8;
 }
 
 .empty-state {
@@ -798,7 +829,7 @@ form .btn { margin-top: 1.2rem; }
     font-size: .85rem; color: var(--text-muted);
     transition: all var(--transition);
 }
-.back-link:hover { color: var(--text); transform: translateX(-3px); }
+.back-link:hover { color: var(--text); transform: translateX(-4px); }
 
 .token-header { margin-bottom: 1.5rem; animation: fadeInUp .4s ease both; }
 .token-header h1 { font-size: 1.6rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
@@ -814,7 +845,7 @@ form .btn { margin-top: 1.2rem; }
     color: var(--text-muted); font-size: .9rem; margin-top: .35rem;
     display: flex; align-items: center; gap: .5rem;
 }
-.live-price strong { color: var(--text); font-size: 1.1rem; }
+.live-price strong { color: var(--text); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
 
 .price-badge {
     font-size: .78rem; padding: .15rem .5rem;
@@ -860,8 +891,8 @@ form .btn { margin-top: 1.2rem; }
     text-transform: uppercase; letter-spacing: .6px; margin-bottom: .5rem;
 }
 
-.pl-value { font-size: 1.55rem; font-weight: 700; }
-.pl-percent { font-size: .85rem; font-weight: 500; opacity: .85; }
+.pl-value { font-size: 1.55rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pl-percent { font-size: .85rem; font-weight: 500; opacity: .85; font-variant-numeric: tabular-nums; }
 
 .pl-card small { display: block; margin-top: .5rem; color: var(--text-muted); font-size: .76rem; }
 
@@ -886,7 +917,7 @@ form .btn { margin-top: 1.2rem; }
     display: block; font-size: .72rem; font-weight: 600;
     color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px;
 }
-.info-grid .val { font-size: 1.08rem; font-weight: 600; margin-top: .15rem; display: block; }
+.info-grid .val { font-size: 1.08rem; font-weight: 600; margin-top: .15rem; display: block; font-variant-numeric: tabular-nums; }
 
 /* ── Trade Forms ──────────────────────────────────────────── */
 
@@ -927,7 +958,10 @@ form .btn { margin-top: 1.2rem; }
     border-radius: 20px; font-size: .72rem;
     font-weight: 700; text-transform: uppercase;
     letter-spacing: .3px;
+    transition: transform .15s ease, box-shadow .15s ease;
 }
+
+.badge:hover { transform: scale(1.05); }
 
 .badge-buy  { background: var(--green-bg); color: var(--green); }
 .badge-sell { background: var(--red-bg); color: var(--red); }
@@ -977,6 +1011,12 @@ form .btn { margin-top: 1.2rem; }
     border: 1px dashed rgba(162, 155, 254, .25);
     border-radius: var(--radius);
     animation: fadeInUp .25s ease both;
+    transition: border-color .3s ease, background .3s ease;
+}
+
+.future-preview:hover {
+    border-color: rgba(162, 155, 254, .4);
+    background: rgba(162, 155, 254, .09);
 }
 
 .future-preview-label {
@@ -1004,6 +1044,7 @@ form .btn { margin-top: 1.2rem; }
 .future-preview-row .val {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+    transition: color .3s ease;
 }
 
 /* ── Tx History ───────────────────────────────────────────── */
@@ -1039,7 +1080,8 @@ form .btn { margin-top: 1.2rem; }
 }
 
 .market-item:hover {
-    background: rgba(124,106,239,.04);
+    background: rgba(124,106,239,.06);
+    transform: translateY(-1px);
 }
 
 .market-item .label {
@@ -1056,6 +1098,7 @@ form .btn { margin-top: 1.2rem; }
     font-weight: 600;
     margin-top: .15rem;
     display: block;
+    font-variant-numeric: tabular-nums;
 }
 
 /* ── Rank Badge ───────────────────────────────────────────── */
@@ -1089,6 +1132,12 @@ form .btn { margin-top: 1.2rem; }
     padding: 1rem;
     margin-bottom: 1rem;
     overflow: hidden;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.graph-container:hover {
+    border-color: rgba(108,92,231,.2);
+    box-shadow: 0 0 20px rgba(108,92,231,.06);
 }
 
 .graph-container canvas {

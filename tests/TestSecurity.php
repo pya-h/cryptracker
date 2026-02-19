@@ -76,18 +76,20 @@ function test_helper_pl_class(): void
 
 function test_helper_format_pl(): void
 {
-    assert_equals('+$1,000.00', formatPL(1000.0), 'Positive P/L format');
-    assert_equals('+$0.00', formatPL(0.0), 'Zero P/L format');
+    // Defaults: precision=3, worthlessZeros=false (trim zeros)
+    assert_equals('+$1,000', formatPL(1000.0), 'Positive P/L format');
+    assert_equals('+$0', formatPL(0.0), 'Zero P/L format');
 
-    // Negative values — the key bug fix: should be -$100.00 not $-100.00
-    assert_equals('-$100.00', formatPL(-100.0), 'Negative P/L should have sign before $');
+    // Negative values — the key bug fix: should be -$100 not $-100
+    assert_equals('-$100', formatPL(-100.0), 'Negative P/L should have sign before $');
     assert_equals('-$1,234.56', formatPL(-1234.56), 'Large negative P/L format');
 }
 
 function test_helper_format_usd(): void
 {
-    assert_equals('$1,000.00', formatUSD(1000.0), 'USD format');
-    assert_equals('$0.00', formatUSD(0.0), 'Zero USD');
+    // Defaults: precision=3, worthlessZeros=false (trim zeros)
+    assert_equals('$1,000', formatUSD(1000.0), 'USD format');
+    assert_equals('$0', formatUSD(0.0), 'Zero USD');
     assert_equals('$99.99', formatUSD(99.99), 'Decimals');
 }
 
@@ -101,9 +103,10 @@ function test_helper_format_crypto(): void
 
 function test_helper_format_percent(): void
 {
+    // Defaults: precision=3, worthlessZeros=false (trim zeros)
     assert_equals('+5.25%', formatPercent(5.25), 'Positive percent');
-    assert_equals('-3.10%', formatPercent(-3.1), 'Negative percent');
-    assert_equals('+0.00%', formatPercent(0.0), 'Zero percent');
+    assert_equals('-3.1%', formatPercent(-3.1), 'Negative percent');
+    assert_equals('+0%', formatPercent(0.0), 'Zero percent');
 }
 
 function test_helper_flash_messages(): void

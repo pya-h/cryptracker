@@ -201,7 +201,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function detectDecimals(text) {
         const m = text.match(/\.(\d+)/);
-        return m ? m[1].length : 2;
+        if (m) return m[1].length;
+        try { return getPrec(); } catch (_) { return 3; }
     }
 
     function formatVal(v, isPL, prefix, dec) {
@@ -224,6 +225,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!main) return;
 
     const page = main.dataset.page;
+
+    function getPrec() {
+        return parseInt(main.dataset.precision) || 3;
+    }
 
     function gatherCmcIds() {
         if (page === 'dashboard') {
@@ -322,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatCryptoJS(v) {
-        const dec = parseInt(main.dataset.precision) || 2;
+        const dec = getPrec();
         const maxDec = Math.max(dec, 8);
         let s = v.toFixed(maxDec);
         s = s.replace(/0+$/, '');
@@ -331,12 +336,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateDashboard(quotes) {
-        const tblDec = Math.min(detectDecimals(
-            document.querySelector('tr[data-cmc-id] td[data-live="price"]')?.textContent || '0.00'
-        ), 6);
+        const tblDec = getPrec();
 
         let sumUnrealized = 0, sumTotal = 0;
-        let sumRealized = 0;
 
         document.querySelectorAll('tr[data-cmc-id]').forEach(row => {
             const cmcId = row.dataset.cmcId;
@@ -378,7 +380,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 flashEl(totalEl);
             }
 
-            sumRealized += realVal;
             sumUnrealized += newUnreal;
             sumTotal += newTotal;
         });
@@ -387,12 +388,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const sumTotalEl = document.querySelector('[data-live="total-pl-total"]');
 
         if (sumUnrealEl) {
-            sumUnrealEl.textContent = formatPLJS(sumUnrealized, 2);
+            sumUnrealEl.textContent = formatPLJS(sumUnrealized, getPrec());
             sumUnrealEl.className = 'summary-value ' + plClassJS(sumUnrealized);
             flashEl(sumUnrealEl);
         }
         if (sumTotalEl) {
-            sumTotalEl.textContent = formatPLJS(sumTotal, 2);
+            sumTotalEl.textContent = formatPLJS(sumTotal, getPrec());
             sumTotalEl.className = 'summary-value ' + plClassJS(sumTotal);
             flashEl(sumTotalEl);
         }
@@ -409,9 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newChange = q.percent_change_24h;
         const newCurrVal = holdings * newPrice;
         const newUnreal = newCurrVal - costBasis;
-        const dec = detectDecimals(
-            document.querySelector('[data-live="currentVal"]')?.textContent || '0.00'
-        );
+        const dec = getPrec();
 
         const realizedEl = document.querySelector('.pl-card:first-child .pl-value');
         const realVal = realizedEl ? parsePLText(realizedEl.textContent) : 0;
@@ -428,12 +427,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalEl = document.querySelector('[data-live="totalPL"]');
         const totalPctEl = document.querySelector('[data-live="totalPercent"]');
 
-        if (priceEl) { priceEl.textContent = trimZerosJS('$' + newPrice.toFixed(6)); flashEl(priceEl); }
+        if (priceEl) { priceEl.textContent = formatUSD(newPrice, dec); flashEl(priceEl); }
 
         // Keep the current price data attribute updated for future calculations
         main.dataset.currentPrice = newPrice;
         if (changeEl) {
-            changeEl.textContent = formatPercentJS(newChange, 2);
+            changeEl.textContent = formatPercentJS(newChange, dec);
             changeEl.className = 'price-badge ' + plClassJS(newChange);
             flashEl(changeEl);
         }
@@ -445,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pctSpan) unrealEl.appendChild(pctSpan);
             flashEl(unrealEl);
         }
-        if (unrealPctEl) { unrealPctEl.textContent = '(' + formatPercentJS(unrealPct, 2) + ')'; }
+        if (unrealPctEl) { unrealPctEl.textContent = '(' + formatPercentJS(unrealPct, dec) + ')'; }
         if (totalEl) {
             const pctSpan = totalEl.querySelector('.pl-percent');
             totalEl.textContent = formatPLJS(newTotal, dec) + ' ';
@@ -453,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pctSpan) totalEl.appendChild(pctSpan);
             flashEl(totalEl);
         }
-        if (totalPctEl) { totalPctEl.textContent = '(' + formatPercentJS(totalPct, 2) + ')'; }
+        if (totalPctEl) { totalPctEl.textContent = '(' + formatPercentJS(totalPct, dec) + ')'; }
 
         // Update "Now" row in analytics table
         const nowRow = document.querySelector('tr[data-live-now="1"]');
@@ -470,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const nTotal = nowRow.querySelector('[data-live-now="totalPL"]');
 
             if (nDate) nDate.textContent = dateStr;
-            if (nPrice) { nPrice.textContent = trimZerosJS('$' + newPrice.toFixed(6)); flashEl(nPrice); }
+            if (nPrice) { nPrice.textContent = formatUSD(newPrice, dec); flashEl(nPrice); }
             if (nHoldVal) { nHoldVal.textContent = formatUSD(newCurrVal, dec); flashEl(nHoldVal); }
             if (nUnreal) {
                 nUnreal.textContent = formatPLJS(newUnreal, dec);
@@ -491,8 +490,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const nowPoint = gd.find(d => d.is_now);
             if (nowPoint) {
                 nowPoint.date = new Date().toISOString().slice(0, 19).replace('T', ' ');
-                nowPoint.total_pl = Math.round(newTotal * 100) / 100;
-                nowPoint.unrealized = Math.round(newUnreal * 100) / 100;
+                nowPoint.total_pl = newTotal;
+                nowPoint.unrealized = newUnreal;
             }
             // Don't redraw here — future previews will redraw with updated price
         }
@@ -659,7 +658,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const plMode     = main.dataset.plMode || 'fifo';
             const symbol     = main.dataset.symbol || '???';
             const rawTxs     = JSON.parse(main.dataset.transactions || '[]');
-            const prec       = parseInt(main.dataset.precision) || 2;
+            const prec       = getPrec();
+
+            // Cache DOM elements for preview updates (avoid repeated getElementById per keystroke)
+            const buyPreviewUnreal    = document.getElementById('buyPreviewUnrealized');
+            const buyPreviewHoldings  = document.getElementById('buyPreviewHoldings');
+            const buyPreviewAvgCost   = document.getElementById('buyPreviewAvgCost');
+            const sellPreviewRealized = document.getElementById('sellPreviewRealized');
+            const sellPreviewHoldings = document.getElementById('sellPreviewHoldings');
+            const sellPreviewCumReal  = document.getElementById('sellPreviewCumRealized');
 
             let futureSequence = [];
 
@@ -888,10 +895,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const afterBuy = calcPL(txsWithBuy, currentPrice);
 
                     buyPreview.style.display = '';
-                    document.getElementById('buyPreviewUnrealized').textContent = formatPLJS(afterBuy.unrealized_pl, prec);
-                    document.getElementById('buyPreviewUnrealized').className = 'val ' + plClassJS(afterBuy.unrealized_pl);
-                    document.getElementById('buyPreviewHoldings').textContent = formatCryptoJS(afterBuy.holdings) + ' ' + symbol;
-                    document.getElementById('buyPreviewAvgCost').textContent = trimZerosJS('$' + afterBuy.avg_buy.toFixed(6));
+                    buyPreviewUnreal.textContent = formatPLJS(afterBuy.unrealized_pl, prec);
+                    buyPreviewUnreal.className = 'val ' + plClassJS(afterBuy.unrealized_pl);
+                    buyPreviewHoldings.textContent = formatCryptoJS(afterBuy.holdings) + ' ' + symbol;
+                    buyPreviewAvgCost.textContent = formatUSD(afterBuy.avg_buy, prec);
                 } else {
                     buyPreview.style.display = 'none';
                 }
@@ -902,12 +909,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (sellInvalid) {
                         // Show '?' for all values when sell exceeds holdings
-                        document.getElementById('sellPreviewRealized').textContent = '?';
-                        document.getElementById('sellPreviewRealized').className = 'val future-invalid';
-                        document.getElementById('sellPreviewHoldings').textContent = '?';
-                        document.getElementById('sellPreviewHoldings').className = 'val future-invalid';
-                        document.getElementById('sellPreviewCumRealized').textContent = '?';
-                        document.getElementById('sellPreviewCumRealized').className = 'val future-invalid';
+                        sellPreviewRealized.textContent = '?';
+                        sellPreviewRealized.className = 'val future-invalid';
+                        sellPreviewHoldings.textContent = '?';
+                        sellPreviewHoldings.className = 'val future-invalid';
+                        sellPreviewCumReal.textContent = '?';
+                        sellPreviewCumReal.className = 'val future-invalid';
                     } else {
                         const txsWithSell = [...baseTxs];
                         for (const ft of futureSequence) {
@@ -929,12 +936,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         const afterSell = calcPL(txsWithSell, currentPrice);
                         const sellRealizedDelta = afterSell.realized_pl - baseResult.realized_pl;
 
-                        document.getElementById('sellPreviewRealized').textContent = formatPLJS(sellRealizedDelta, prec);
-                        document.getElementById('sellPreviewRealized').className = 'val ' + plClassJS(sellRealizedDelta);
-                        document.getElementById('sellPreviewHoldings').textContent = formatCryptoJS(afterSell.holdings) + ' ' + symbol;
-                        document.getElementById('sellPreviewHoldings').className = 'val';
-                        document.getElementById('sellPreviewCumRealized').textContent = formatPLJS(afterSell.realized_pl, prec);
-                        document.getElementById('sellPreviewCumRealized').className = 'val ' + plClassJS(afterSell.realized_pl);
+                        sellPreviewRealized.textContent = formatPLJS(sellRealizedDelta, prec);
+                        sellPreviewRealized.className = 'val ' + plClassJS(sellRealizedDelta);
+                        sellPreviewHoldings.textContent = formatCryptoJS(afterSell.holdings) + ' ' + symbol;
+                        sellPreviewHoldings.className = 'val';
+                        sellPreviewCumReal.textContent = formatPLJS(afterSell.realized_pl, prec);
+                        sellPreviewCumReal.className = 'val ' + plClassJS(afterSell.realized_pl);
                     }
                 } else {
                     sellPreview.style.display = 'none';
@@ -989,7 +996,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 '<td>' + futureLabel + '</td>' +
                                 '<td><span class="badge ' + badgeClass + '">' +
                                     '-' + formatCryptoJS(ftx.amount) + '</span></td>' +
-                                '<td>' + trimZerosJS('$' + ftx.price_per_unit.toFixed(6)) + '</td>' +
+                                '<td>' + formatUSD(ftx.price_per_unit, prec) + '</td>' +
                                 '<td>' + formatUSD(ftx.total_value, prec) + '</td>' +
                                 '<td>?</td><td>?</td><td>?</td><td>?</td><td>?</td><td>?</td>';
                         } else {
@@ -999,10 +1006,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 '<td><span class="badge ' + badgeClass + '">'
                                     + (ftx.future_type === 'buy' ? '+' : '-')
                                     + formatCryptoJS(entry.amount) + '</span></td>' +
-                                '<td>' + trimZerosJS('$' + entry.ppu.toFixed(6)) + '</td>' +
+                                '<td>' + formatUSD(entry.ppu, prec) + '</td>' +
                                 '<td>' + formatUSD(entry.total, prec) + '</td>' +
                                 '<td>' + formatCryptoJS(entry.holdings) + '</td>' +
-                                '<td>' + trimZerosJS('$' + entry.avg_cost.toFixed(6)) + '</td>' +
+                                '<td>' + formatUSD(entry.avg_cost, prec) + '</td>' +
                                 '<td class="' + plClassJS(entry.realized) + '">'
                                     + (entry.type === 'sell' ? formatPLJS(entry.realized, prec) : '\u2013') + '</td>' +
                                 '<td class="' + plClassJS(entry.cum_realized) + '">' + formatPLJS(entry.cum_realized, prec) + '</td>' +
@@ -1020,9 +1027,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     futureTimelineEntries.forEach(entry => {
                         window._plGraphData.push({
                             date: entry.date,
-                            total_pl: Math.round(entry.total_pl * 100) / 100,
-                            unrealized: Math.round(entry.unrealized * 100) / 100,
-                            cum_realized: Math.round(entry.cum_realized * 100) / 100,
+                            total_pl: entry.total_pl,
+                            unrealized: entry.unrealized,
+                            cum_realized: entry.cum_realized,
                             is_future: true,
                         });
                     });

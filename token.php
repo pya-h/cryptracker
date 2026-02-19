@@ -28,10 +28,10 @@ $msupply   = $quote['msupply'] ?? 0;
 $rank      = $quote['rank'] ?? 0;
 
 $allTxAsc = dbGetTransactions($tokenId);
-$allTx    = dbGetTransactionsDesc($tokenId);
+$allTx    = array_reverse($allTxAsc);
 
 $mode = plMode();
-$pl   = calcTokenPL($tokenId, $price, $mode);
+$pl   = ($mode === 'fifo') ? _calcFifo($allTxAsc, $price) : _calcAvg($allTxAsc, $price);
 
 $holdings     = $pl['holdings'];
 $avgBuy       = $pl['avg_buy'];
@@ -50,16 +50,16 @@ $lastCumRealized = !empty($plTimeline) ? end($plTimeline)['cum_realized'] : 0;
 
 $graphPoints = array_map(fn($p) => [
     'date'         => $p['date'],
-    'total_pl'     => round($p['total_pl'], 2),
-    'unrealized'   => round($p['unrealized'], 2),
-    'cum_realized' => round($p['cum_realized'], 2),
+    'total_pl'     => $p['total_pl'],
+    'unrealized'   => $p['unrealized'],
+    'cum_realized' => $p['cum_realized'],
 ], $plTimeline);
 
 $graphPoints[] = [
     'date'         => date('Y-m-d H:i:s'),
-    'total_pl'     => round($totalPL, 2),
-    'unrealized'   => round($unrealizedPL, 2),
-    'cum_realized' => round($lastCumRealized, 2),
+    'total_pl'     => $totalPL,
+    'unrealized'   => $unrealizedPL,
+    'cum_realized' => $lastCumRealized,
     'is_now'       => true,
 ];
 
@@ -94,7 +94,7 @@ layoutNav($user);
                     <span class="symbol-badge"><?= e($token['symbol']) ?></span>
                 </h1>
                 <p class="live-price">
-                    Current Price: <strong data-live="price">$<?= number_format($price, 6) ?></strong>
+                    Current Price: <strong data-live="price"><?= formatUSD($price) ?></strong>
                     <span class="price-badge <?= plClass($change24) ?>" data-live="change24"><?= formatPercent($change24) ?></span>
                 </p>
             </div>
@@ -131,7 +131,7 @@ layoutNav($user);
         <section class="holdings-info">
             <div class="info-grid">
                 <div><span class="label">Holdings</span><span class="val"><?= formatCrypto($holdings) ?> <?= e($token['symbol']) ?></span></div>
-                <div><span class="label">Avg Buy Price</span><span class="val">$<?= number_format($avgBuy, 6) ?></span></div>
+                <div><span class="label">Avg Buy Price</span><span class="val"><?= formatUSD($avgBuy) ?></span></div>
                 <div><span class="label">Cost Basis</span><span class="val"><?= formatUSD($costBasis) ?></span></div>
                 <div><span class="label">Current Value</span><span class="val" data-live="currentVal"><?= formatUSD($currentValue) ?></span></div>
             </div>
@@ -192,7 +192,7 @@ layoutNav($user);
 
                     <label>Price per unit (USD)</label>
                     <input type="number" name="price_per_unit" step="any" min="0.00000001" required
-                           value="<?= number_format($price, 6, '.', '') ?>" placeholder="0.00" id="buyPrice">
+                           value="<?= formatFormValue($price) ?>" placeholder="0.00" id="buyPrice">
 
                     <div class="future-preview" id="buyPreview" style="display:none;">
                         <div class="future-preview-label">After this buy:</div>
@@ -227,7 +227,7 @@ layoutNav($user);
 
                     <label>Price per unit (USD)</label>
                     <input type="number" name="price_per_unit" step="any" min="0.00000001" required
-                           value="<?= number_format($price, 6, '.', '') ?>" placeholder="0.00" id="sellPrice">
+                           value="<?= formatFormValue($price) ?>" placeholder="0.00" id="sellPrice">
 
                     <div class="future-preview" id="sellPreview" style="display:none;">
                         <div class="future-preview-label">After this sell:</div>
@@ -301,11 +301,8 @@ layoutNav($user);
                             <td class="<?= plClass($row['total_pl']) ?>"><?= formatPL($row['total_pl']) ?></td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php
-                            $nowCumRealized = $lastCumRealized;
-                        ?>
                         <tr class="now-row" data-live-now="1"
-                            data-cum-realized="<?= $nowCumRealized ?>">
+                            data-cum-realized="<?= $lastCumRealized ?>">
                             <td data-live-now="date"><?= date('M d, Y H:i') ?></td>
                             <td><span class="badge badge-now">Now</span></td>
                             <td data-live-now="price"><?= formatUSD($price) ?></td>
@@ -313,7 +310,7 @@ layoutNav($user);
                             <td><?= formatCrypto($holdings) ?></td>
                             <td><?= formatUSD($avgBuy) ?></td>
                             <td>–</td>
-                            <td class="<?= plClass($nowCumRealized) ?>"><?= formatPL($nowCumRealized) ?></td>
+                            <td class="<?= plClass($lastCumRealized) ?>"><?= formatPL($lastCumRealized) ?></td>
                             <td class="<?= plClass($unrealizedPL) ?>" data-live-now="unrealized"><?= formatPL($unrealizedPL) ?></td>
                             <td class="<?= plClass($totalPL) ?>" data-live-now="totalPL"><?= formatPL($totalPL) ?></td>
                         </tr>
