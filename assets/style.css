@@ -148,6 +148,38 @@ a:hover { color: var(--primary-h); }
 
 .nav-right { display: flex; align-items: center; gap: 1rem; }
 
+.source-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .28rem .65rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,.04);
+    color: var(--text-muted);
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .2px;
+}
+
+.source-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px rgba(0,212,161,.35);
+}
+
+.source-indicator.fallback-active {
+    border-color: rgba(255,192,72,.35);
+    color: var(--yellow);
+}
+
+.source-indicator.fallback-active .source-dot {
+    background: var(--yellow);
+    box-shadow: 0 0 8px rgba(255,192,72,.45);
+}
+
 .nav-user {
     color: var(--text-muted); font-size: .87rem;
     display: flex; align-items: center; gap: .5rem;
@@ -507,13 +539,29 @@ label {
 input[type="text"],
 input[type="email"],
 input[type="password"],
-input[type="number"] {
+input[type="number"],
+select {
     width: 100%; padding: .7rem .9rem;
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     color: var(--text); font-size: .95rem;
     transition: all var(--transition);
+}
+
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+    background-position: calc(100% - 16px) calc(50% - 3px), calc(100% - 11px) calc(50% - 3px);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 2rem;
+}
+
+.setting-note {
+    color: var(--text-muted);
+    font-size: .76rem;
 }
 
 input:focus {
@@ -550,6 +598,42 @@ form .btn { margin-top: 1.2rem; }
 
 .alert p { margin: 0; }
 .alert p + p { margin-top: .3rem; }
+
+.toast-stack {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    pointer-events: none;
+}
+
+.app-toast {
+    min-width: 260px;
+    max-width: 420px;
+    padding: .75rem .95rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-card-solid);
+    color: var(--text);
+    font-size: .84rem;
+    line-height: 1.35;
+    transform: translateY(10px);
+    opacity: 0;
+    transition: opacity .2s ease, transform .2s ease;
+}
+
+.app-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.app-toast-info {
+    border-color: rgba(124,106,239,.35);
+}
 
 /* ── Portfolio Summary Cards ──────────────────────────────── */
 
@@ -1030,6 +1114,7 @@ form .btn { margin-top: 1.2rem; }
     .info-grid { grid-template-columns: 1fr 1fr; }
     .market-grid { grid-template-columns: 1fr 1fr; }
     .auth-card { padding: 2rem 1.5rem; }
+    .source-indicator { display: none; }
 }
 
 @media (max-width: 480px) {

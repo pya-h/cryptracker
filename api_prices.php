@@ -29,7 +29,9 @@ if (count($ids) > 100) {
 
 if (empty($ids)) { echo '{}'; exit; }
 
-$quotes = coinloreGetQuotes($ids);
+$result = apiGetQuotesDetailed($ids, true);
+$quotes = $result['quotes'] ?? [];
+$meta = $result['meta'] ?? [];
 
 $out = [];
 foreach ($quotes as $cmcId => $q) {
@@ -39,4 +41,15 @@ foreach ($quotes as $cmcId => $q) {
     ];
 }
 
-echo json_encode($out);
+echo json_encode([
+    'quotes' => $out,
+    'meta' => [
+        'preferred_source_before' => $meta['preferred_source_before'] ?? selectedPriceSource(),
+        'preferred_source_after' => $meta['preferred_source_after'] ?? selectedPriceSource(),
+        'used_source' => $meta['used_source'] ?? '',
+        'fallback_used' => (bool) ($meta['fallback_used'] ?? false),
+        'auto_switched' => (bool) ($meta['auto_switched'] ?? false),
+        'auto_switched_to' => $meta['auto_switched_to'] ?? '',
+        'toast_message' => $meta['toast_message'] ?? '',
+    ],
+]);

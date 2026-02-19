@@ -1,10 +1,67 @@
 <?php
 /**
  * Crypto price API wrapper.
- * Primary: CoinLore (free, no key). Fallback: CoinMarketCap.
+ * Default source: CoinMarketCap.
+ * Supported sources: CoinMarketCap, CoinLore, CoinGecko.
  */
 
 require_once __DIR__ . '/config.php';
+
+const PRICE_SOURCE_DEFAULT = 'coinmarketcap';
+const PRICE_SOURCE_RAPID_WINDOW = 90;
+
+function priceSourcesList(): array
+{
+    return ['coinmarketcap', 'coinlore', 'coingecko'];
+}
+
+function normalizePriceSource(string $source): string
+{
+    $source = strtolower(trim($source));
+    return in_array($source, priceSourcesList(), true) ? $source : PRICE_SOURCE_DEFAULT;
+}
+
+function selectedPriceSource(): string
+{
+    $current = $_SESSION['price_source'] ?? PRICE_SOURCE_DEFAULT;
+    return normalizePriceSource((string) $current);
+}
+
+function setSelectedPriceSource(string $source): void
+{
+    $_SESSION['price_source'] = normalizePriceSource($source);
+}
+
+function nextPriceSource(string $source): string
+{
+    $list = priceSourcesList();
+    $idx = array_search(normalizePriceSource($source), $list, true);
+    if ($idx === false) return PRICE_SOURCE_DEFAULT;
+    return $list[($idx + 1) % count($list)];
+}
+
+function sourcePriority(string $preferred): array
+{
+    $preferred = normalizePriceSource($preferred);
+    $list = priceSourcesList();
+    return array_values(array_unique(array_merge([$preferred], $list)));
+}
+
+function sourceDisplayName(string $source): string
+{
+    return match (normalizePriceSource($source)) {
+        'coinmarketcap' => 'CoinMarketCap',
+        'coinlore' => 'CoinLore',
+        'coingecko' => 'CoinGecko',
+        default => 'Unknown',
+    };
+}
+
+function geckoCoinListCacheFile(): string
+{
+    $base = defined('APP_BASE_PATH') ? APP_BASE_PATH : dirname(__DIR__);
+    return $base . '/database/coingecko_list_cache.json';
+}
 
 function httpGet(string $url, array $extraHeaders = [], int $timeout = 15): ?string
 {
@@ -35,6 +92,37 @@ function coinloreCacheFile(): string
 {
     $base = defined('APP_BASE_PATH') ? APP_BASE_PATH : dirname(__DIR__);
     return $base . '/database/coinlore_cache.json';
+}
+
+function geckoGetCoinList(): array
+{
+    static $mem = null;
+    if ($mem !== null) return $mem;
+
+    $cacheFile = geckoCoinListCacheFile();
+    $cacheDir = dirname($cacheFile);
+    if (!is_dir($cacheDir)) mkdir($cacheDir, 0755, true);
+
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 86400) {
+        $mem = json_decode(file_get_contents($cacheFile), true) ?: [];
+        if (!empty($mem)) return $mem;
+    }
+
+    $raw = httpGet('https://api.coingecko.com/api/v3/coins/list?include_platform=false', [], 20);
+    if (!$raw) {
+        $mem = [];
+        return $mem;
+    }
+
+    $list = json_decode($raw, true);
+    if (!is_array($list)) {
+        $mem = [];
+        return $mem;
+    }
+
+    file_put_contents($cacheFile, json_encode($list), LOCK_EX);
+    $mem = $list;
+    return $mem;
 }
 
 function coinloreGetAll(): array
@@ -190,18 +278,280 @@ function cmcGetQuotes(array $cmcIds): array
     return $out;
 }
 
+function geckoCmcMap(): array
+{
+    static $map = null;
+    if ($map !== null) return $map;
+
+    $coinlore = coinloreGetAll();
+    $gecko = geckoGetCoinList();
+    if (empty($coinlore) || empty($gecko)) {
+        $map = [];
+        return $map;
+    }
+
+    $geckoById = [];
+    $geckoBySymbol = [];
+    foreach ($gecko as $entry) {
+        $gid = strtolower((string) ($entry['id'] ?? ''));
+        $gs = strtolower((string) ($entry['symbol'] ?? ''));
+        if ($gid === '') continue;
+        $geckoById[$gid] = $entry;
+        if ($gs !== '') {
+            $geckoBySymbol[$gs][] = $entry;
+        }
+    }
+
+    $map = [];
+    foreach ($coinlore as $coin) {
+        $cmcId = (int) ($coin['id'] ?? 0);
+        if ($cmcId <= 0) continue;
+
+        $slug = strtolower((string) ($coin['nameid'] ?? ''));
+        $symbol = strtolower((string) ($coin['symbol'] ?? ''));
+        $name = strtolower((string) ($coin['name'] ?? ''));
+
+        $selected = null;
+
+        if ($slug !== '' && isset($geckoById[$slug])) {
+            $selected = $slug;
+        } elseif ($symbol !== '' && !empty($geckoBySymbol[$symbol])) {
+            $cands = $geckoBySymbol[$symbol];
+            if (count($cands) === 1) {
+                $selected = strtolower((string) $cands[0]['id']);
+            } else {
+                foreach ($cands as $cand) {
+                    if (strtolower((string) ($cand['name'] ?? '')) === $name) {
+                        $selected = strtolower((string) $cand['id']);
+                        break;
+                    }
+                }
+                if ($selected === null) {
+                    $selected = strtolower((string) $cands[0]['id']);
+                }
+            }
+        }
+
+        if ($selected !== null && $selected !== '') {
+            $map[$cmcId] = $selected;
+        }
+    }
+
+    return $map;
+}
+
+function geckoGetQuotes(array $cmcIds): array
+{
+    if (empty($cmcIds)) return [];
+
+    $cmcIds = array_values(array_unique(array_map('intval', $cmcIds)));
+    $cmcToGecko = geckoCmcMap();
+
+    $geckoToCmc = [];
+    foreach ($cmcIds as $cmcId) {
+        $gid = $cmcToGecko[$cmcId] ?? null;
+        if ($gid) $geckoToCmc[$gid] = $cmcId;
+    }
+
+    if (empty($geckoToCmc)) return [];
+
+    $idsParam = implode(',', array_keys($geckoToCmc));
+    $url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=' . rawurlencode($idsParam)
+        . '&sparkline=false&price_change_percentage=1h,24h,7d';
+
+    $raw = httpGet($url, [], 20);
+    if (!$raw) return [];
+
+    $rows = json_decode($raw, true);
+    if (!is_array($rows)) return [];
+
+    $out = [];
+    foreach ($rows as $row) {
+        $gid = strtolower((string) ($row['id'] ?? ''));
+        $cmcId = $geckoToCmc[$gid] ?? null;
+        if (!$cmcId) continue;
+
+        $out[(int) $cmcId] = [
+            'price'              => (float) ($row['current_price'] ?? 0),
+            'percent_change_1h'  => (float) ($row['price_change_percentage_1h_in_currency'] ?? 0),
+            'percent_change_24h' => (float) ($row['price_change_percentage_24h'] ?? 0),
+            'percent_change_7d'  => (float) ($row['price_change_percentage_7d_in_currency'] ?? 0),
+            'market_cap'         => (float) ($row['market_cap'] ?? 0),
+            'volume_24h'         => (float) ($row['total_volume'] ?? 0),
+            'volume_24h_native'  => 0.0,
+            'csupply'            => (float) ($row['circulating_supply'] ?? 0),
+            'tsupply'            => (float) ($row['total_supply'] ?? 0),
+            'msupply'            => (float) ($row['max_supply'] ?? 0),
+            'rank'               => (int) ($row['market_cap_rank'] ?? 0),
+        ];
+    }
+
+    return $out;
+}
+
+function providerGetQuotes(string $source, array $ids): array
+{
+    return match (normalizePriceSource($source)) {
+        'coinmarketcap' => cmcGetQuotes($ids),
+        'coinlore' => coinloreGetQuotes($ids),
+        'coingecko' => geckoGetQuotes($ids),
+        default => [],
+    };
+}
+
+function recordPreferredSourceAttempt(string $preferredSource, bool $success): array
+{
+    $preferredSource = normalizePriceSource($preferredSource);
+
+    if (!isset($_SESSION['price_source_fail'])) {
+        $_SESSION['price_source_fail'] = ['source' => $preferredSource, 'count' => 0, 'last_ts' => 0];
+    }
+
+    $state = $_SESSION['price_source_fail'];
+    $now = time();
+
+    if ($success) {
+        $_SESSION['price_source_fail'] = ['source' => $preferredSource, 'count' => 0, 'last_ts' => 0];
+        return ['auto_switched' => false, 'new_source' => $preferredSource, 'failure_count' => 0, 'toast_message' => ''];
+    }
+
+    if (($state['source'] ?? '') !== $preferredSource || ($now - (int) ($state['last_ts'] ?? 0)) > PRICE_SOURCE_RAPID_WINDOW) {
+        $count = 1;
+    } else {
+        $count = ((int) ($state['count'] ?? 0)) + 1;
+    }
+
+    $_SESSION['price_source_fail'] = ['source' => $preferredSource, 'count' => $count, 'last_ts' => $now];
+
+    if ($count >= 3) {
+        $next = nextPriceSource($preferredSource);
+        setSelectedPriceSource($next);
+        $_SESSION['price_source_fail'] = ['source' => $next, 'count' => 0, 'last_ts' => 0];
+
+        return [
+            'auto_switched' => true,
+            'new_source' => $next,
+            'failure_count' => 0,
+            'toast_message' => 'Price source auto-switched to ' . sourceDisplayName($next) . ' after repeated failures from ' . sourceDisplayName($preferredSource) . '.',
+        ];
+    }
+
+    return ['auto_switched' => false, 'new_source' => $preferredSource, 'failure_count' => $count, 'toast_message' => ''];
+}
+
+function apiGetQuotesDetailed(array $ids, bool $trackPreferredFailures = false): array
+{
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    $ids = array_values(array_filter($ids, fn($id) => $id > 0));
+    if (empty($ids)) {
+        return ['quotes' => [], 'meta' => ['preferred_source_before' => selectedPriceSource(), 'preferred_source_after' => selectedPriceSource(), 'used_source' => '', 'auto_switched' => false, 'toast_message' => '']];
+    }
+
+    $preferredBefore = selectedPriceSource();
+    $priority = sourcePriority($preferredBefore);
+
+    $quotes = [];
+    $usedSource = '';
+    $preferredCount = 0;
+
+    foreach ($priority as $source) {
+        $res = providerGetQuotes($source, $ids);
+
+        if ($source === $preferredBefore) {
+            $preferredCount = count($res);
+        }
+
+        if (!empty($res) && $usedSource === '') {
+            $usedSource = $source;
+        }
+
+        foreach ($res as $id => $q) {
+            if (!isset($quotes[$id])) {
+                $quotes[$id] = $q;
+            }
+        }
+
+        if (count($quotes) >= count($ids)) {
+            break;
+        }
+    }
+
+    $preferredSuccess = $preferredCount >= count($ids);
+    $switchMeta = ['auto_switched' => false, 'new_source' => $preferredBefore, 'failure_count' => 0, 'toast_message' => ''];
+
+    if ($trackPreferredFailures) {
+        $switchMeta = recordPreferredSourceAttempt($preferredBefore, $preferredSuccess);
+    }
+
+    $preferredAfter = selectedPriceSource();
+
+    return [
+        'quotes' => $quotes,
+        'meta' => [
+            'preferred_source_before' => $preferredBefore,
+            'preferred_source_after' => $preferredAfter,
+            'used_source' => $usedSource,
+            'fallback_used' => $usedSource !== '' && $usedSource !== $preferredBefore,
+            'auto_switched' => (bool) $switchMeta['auto_switched'],
+            'auto_switched_to' => $switchMeta['new_source'],
+            'failure_count' => (int) $switchMeta['failure_count'],
+            'toast_message' => (string) $switchMeta['toast_message'],
+        ],
+    ];
+}
+
+function geckoSearchCoins(string $query): array
+{
+    $query = trim($query);
+    if ($query === '') return [];
+
+    $raw = httpGet('https://api.coingecko.com/api/v3/search?query=' . rawurlencode($query), [], 15);
+    if (!$raw) return [];
+
+    $json = json_decode($raw, true);
+    $coins = $json['coins'] ?? [];
+    if (!is_array($coins) || empty($coins)) return [];
+
+    $cmcToGecko = geckoCmcMap();
+    $geckoToCmc = array_flip($cmcToGecko);
+
+    $result = [];
+    foreach ($coins as $coin) {
+        $gid = strtolower((string) ($coin['id'] ?? ''));
+        $cmcId = $geckoToCmc[$gid] ?? null;
+        if (!$cmcId) continue;
+
+        $result[] = [
+            'id' => (int) $cmcId,
+            'name' => (string) ($coin['name'] ?? ''),
+            'symbol' => strtoupper((string) ($coin['symbol'] ?? '')),
+            'slug' => (string) ($coin['id'] ?? ''),
+        ];
+
+        if (count($result) >= 20) break;
+    }
+
+    return $result;
+}
+
 function apiSearchCoins(string $query): array
 {
-    $results = coinloreSearch($query);
-    if (!empty($results)) return $results;
-    return cmcSearchCoins($query);
+    $priority = sourcePriority(selectedPriceSource());
+    foreach ($priority as $source) {
+        $results = match ($source) {
+            'coinmarketcap' => cmcSearchCoins($query),
+            'coinlore' => coinloreSearch($query),
+            'coingecko' => geckoSearchCoins($query),
+            default => [],
+        };
+        if (!empty($results)) return $results;
+    }
+    return [];
 }
 
 function apiGetQuotes(array $ids): array
 {
-    $quotes = coinloreGetQuotes($ids);
-    if (!empty($quotes)) return $quotes;
-    return cmcGetQuotes($ids);
+    return apiGetQuotesDetailed($ids, false)['quotes'];
 }
 
 function apiGetPrice(int $id): float

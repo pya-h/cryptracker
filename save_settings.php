@@ -36,6 +36,23 @@ switch ($action) {
         flash('success', "Precision set to $p decimal digits.");
         break;
 
+    case 'price_source':
+        $src = strtolower(trim((string) ($_POST['price_source'] ?? 'coinmarketcap')));
+        $allowedSources = ['coinmarketcap', 'coinlore', 'coingecko'];
+        if (!in_array($src, $allowedSources, true)) {
+            flash('error', 'Invalid price source selected.');
+            break;
+        }
+        $_SESSION['price_source'] = $src;
+        $_SESSION['price_source_fail'] = ['source' => $src, 'count' => 0, 'last_ts' => 0];
+        $label = match ($src) {
+            'coinlore' => 'CoinLore',
+            'coingecko' => 'CoinGecko',
+            default => 'CoinMarketCap',
+        };
+        flash('success', 'Price source changed to ' . $label . '.');
+        break;
+
     case 'username':
         $newName = trim($_POST['new_username'] ?? '');
         if (!preg_match('/^[a-zA-Z0-9_\-]{3,30}$/', $newName)) {

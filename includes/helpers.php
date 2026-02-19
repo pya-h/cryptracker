@@ -128,6 +128,23 @@ function theme(): string
     return $_SESSION['theme'] ?? 'dark';
 }
 
+function priceSource(): string
+{
+    $src = strtolower((string) ($_SESSION['price_source'] ?? 'coinmarketcap'));
+    $allowed = ['coinmarketcap', 'coinlore', 'coingecko'];
+    return in_array($src, $allowed, true) ? $src : 'coinmarketcap';
+}
+
+function priceSourceLabel(string $source): string
+{
+    return match ($source) {
+        'coinmarketcap' => 'CoinMarketCap',
+        'coinlore' => 'CoinLore',
+        'coingecko' => 'CoinGecko',
+        default => 'CoinMarketCap',
+    };
+}
+
 /**
  * P/L calculator: 'avg' (weighted-average) or 'fifo' (oldest lots first).
  */
@@ -341,12 +358,18 @@ function layoutNav(array $user): void
     if (!preg_match('/^(index\.php|token\.php\?id=\d+)$/', $redirect)) {
         $redirect = 'index.php';
     }
+    $src = priceSource();
+    $srcLabel = priceSourceLabel($src);
 
     echo '<nav class="navbar animate-slide-down">
         <a href="index.php" class="nav-brand">
             <span class="brand-icon">◈</span> ' . e(APP_NAME) . '
         </a>
         <div class="nav-right">
+            <div class="source-indicator" id="sourceIndicator" data-selected-source="' . e($src) . '">
+                <span class="source-dot"></span>
+                <span class="source-text">' . e($srcLabel) . '</span>
+            </div>
             <form method="POST" action="toggle_mode.php" class="mode-toggle-form">
                 ' . csrfField() . '
                 <input type="hidden" name="redirect" value="' . e($redirect) . '">
@@ -396,6 +419,7 @@ function layoutCustomizeModal(array $user, string $redirect): void
     $thm = theme();
     $prec = precision();
     $wz   = worthlessZeros();
+    $src = priceSource();
 
     echo '<div class="modal-overlay" id="customizeOverlay">
     <div class="modal animate-scale-in">
@@ -447,6 +471,22 @@ function layoutCustomizeModal(array $user, string $redirect): void
                         <span>Worthless Zeros</span>
                     </label>
                     <button type="submit" class="btn btn-primary btn-sm" style="margin-top:.5rem">Apply</button>
+                </form>
+            </div>
+
+            <div class="setting-group">
+                <span class="setting-label">Price Source</span>
+                <form method="POST" action="save_settings.php" class="settings-form">
+                    ' . csrfField() . '
+                    <input type="hidden" name="action" value="price_source">
+                    <input type="hidden" name="redirect" value="' . e($redirect) . '">
+                    <select name="price_source" required>
+                        <option value="coinmarketcap"' . ($src === 'coinmarketcap' ? ' selected' : '') . '>CoinMarketCap (default)</option>
+                        <option value="coinlore"' . ($src === 'coinlore' ? ' selected' : '') . '>CoinLore</option>
+                        <option value="coingecko"' . ($src === 'coingecko' ? ' selected' : '') . '>CoinGecko</option>
+                    </select>
+                    <small class="setting-note">Current source: ' . e(priceSourceLabel($src)) . '</small>
+                    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
                 </form>
             </div>
 

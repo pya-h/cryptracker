@@ -242,6 +242,59 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => el.classList.remove('live-flash'), 600);
     }
 
+    function showToast(message, type = 'info') {
+        if (!message) return;
+
+        let stack = document.getElementById('toastStack');
+        if (!stack) {
+            stack = document.createElement('div');
+            stack.id = 'toastStack';
+            stack.className = 'toast-stack';
+            document.body.appendChild(stack);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = 'app-toast app-toast-' + type;
+        toast.textContent = message;
+        stack.appendChild(toast);
+
+        requestAnimationFrame(() => toast.classList.add('show'));
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 250);
+        }, 4200);
+    }
+
+    function sourceLabel(source) {
+        const normalized = (source || '').toLowerCase();
+        if (normalized === 'coinlore') return 'CoinLore';
+        if (normalized === 'coingecko') return 'CoinGecko';
+        return 'CoinMarketCap';
+    }
+
+    function updateSourceIndicator(meta) {
+        if (!meta) return;
+
+        const indicator = document.getElementById('sourceIndicator');
+        if (!indicator) return;
+
+        const preferredAfter = (meta.preferred_source_after || '').toLowerCase();
+        const usedSource = (meta.used_source || '').toLowerCase();
+        const fallbackActive = !!meta.fallback_used && usedSource !== '' && preferredAfter !== '' && usedSource !== preferredAfter;
+
+        const textEl = indicator.querySelector('.source-text');
+        if (textEl) {
+            textEl.textContent = sourceLabel(preferredAfter || indicator.dataset.selectedSource || 'coinmarketcap');
+        }
+
+        indicator.dataset.selectedSource = preferredAfter || indicator.dataset.selectedSource || 'coinmarketcap';
+        indicator.classList.toggle('fallback-active', fallbackActive);
+        indicator.title = fallbackActive
+            ? ('Using fallback: ' + sourceLabel(usedSource) + ' (preferred: ' + sourceLabel(preferredAfter) + ')')
+            : ('Preferred source: ' + sourceLabel(preferredAfter || indicator.dataset.selectedSource));
+    }
+
     function plClassJS(v) { return v >= 0 ? 'profit' : 'loss'; }
 
     function formatUSD(v, dec) {
@@ -430,6 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let refreshInFlight = false;
+    let lastAutoSwitchToken = '';
 
     async function refreshPrices() {
         const ids = gatherCmcIds();
@@ -438,7 +492,20 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('api_prices.php?ids=' + ids.join(','), { cache: 'no-store' });
             if (!res.ok) return;
-            const quotes = await res.json();
+            const payload = await res.json();
+            const quotes = payload && payload.quotes ? payload.quotes : payload;
+            const meta = payload && payload.meta ? payload.meta : null;
+
+            if (meta && meta.auto_switched) {
+                const token = (meta.preferred_source_before || '') + '>' + (meta.auto_switched_to || '') + ':' + (meta.toast_message || '');
+                if (token !== lastAutoSwitchToken) {
+                    lastAutoSwitchToken = token;
+                    showToast(meta.toast_message || 'Price source auto-switched after repeated failures.', 'info');
+                }
+            }
+
+            updateSourceIndicator(meta);
+
             if (page === 'dashboard') updateDashboard(quotes);
             if (page === 'token') updateTokenPage(quotes);
         } catch (_) {
