@@ -379,7 +379,7 @@ layoutNav($user);
         if (!canvas || !canvas.getContext || !window._plGraphData.length) return;
 
         const ctx = canvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
+        const dpr = Math.min(3, Math.max(window.devicePixelRatio || 1, 2));
         const container = document.getElementById('graphContainer');
         const tooltip = document.getElementById('graphTooltip');
 
@@ -961,14 +961,23 @@ layoutNav($user);
             sh = Math.min(sh, cRect.height - sy);
             if (sw < 10 || sh < 10) return;
 
-            /* Scale to actual canvas pixels (DPR) */
+            const scaleX = canvas.width / cRect.width;
+            const scaleY = canvas.height / cRect.height;
+            const srcX = Math.max(0, Math.floor(sx * scaleX));
+            const srcY = Math.max(0, Math.floor(sy * scaleY));
+            const srcW = Math.max(1, Math.floor(sw * scaleX));
+            const srcH = Math.max(1, Math.floor(sh * scaleY));
+
+            /* Preserve high-res crop for zooming in modal */
             const cropCanvas = document.createElement('canvas');
-            cropCanvas.width  = sw * dpr;
-            cropCanvas.height = sh * dpr;
+            cropCanvas.width = srcW;
+            cropCanvas.height = srcH;
             const cropCtx = cropCanvas.getContext('2d');
+            cropCtx.imageSmoothingEnabled = true;
+            cropCtx.imageSmoothingQuality = 'high';
             cropCtx.drawImage(canvas,
-                sx * dpr, sy * dpr, sw * dpr, sh * dpr,
-                0, 0, sw * dpr, sh * dpr
+                srcX, srcY, srcW, srcH,
+                0, 0, srcW, srcH
             );
             const dataUrl = cropCanvas.toDataURL('image/png');
             openScreenshotModal(dataUrl);
