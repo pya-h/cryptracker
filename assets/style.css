@@ -1368,9 +1368,13 @@ form .btn { margin-top: 1.2rem; }
     min-height: 180px;
     max-height: calc(90vh - 52px);
     cursor: grab;
+    touch-action: none;
     background: repeating-conic-gradient(rgba(255,255,255,.02) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px;
 }
 .graph-screenshot-viewport:active {
+    cursor: grabbing;
+}
+.graph-screenshot-viewport.panning {
     cursor: grabbing;
 }
 .graph-screenshot-viewport img {

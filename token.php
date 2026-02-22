@@ -973,9 +973,41 @@ layoutNav($user);
             /* Animate in */
             requestAnimationFrame(() => overlay.classList.add('visible'));
 
+            const zoomLbl = toolbar.querySelector('#ssZoomLbl');
+            let panX = 0;
+            let panY = 0;
+            let panning = false;
+            let panLastX = 0;
+            let panLastY = 0;
+            const PAN_SLACK = 56;
+
+            function getPanBounds() {
+                const scaledW = img.getBoundingClientRect().width;
+                const scaledH = img.getBoundingClientRect().height;
+                const maxPanX = Math.max(PAN_SLACK, (scaledW - viewport.clientWidth) / 2 + PAN_SLACK);
+                const maxPanY = Math.max(PAN_SLACK, (scaledH - viewport.clientHeight) / 2 + PAN_SLACK);
+                return { maxPanX, maxPanY };
+            }
+
+            function clampPan() {
+                const { maxPanX, maxPanY } = getPanBounds();
+                panX = Math.min(maxPanX, Math.max(-maxPanX, panX));
+                panY = Math.min(maxPanY, Math.max(-maxPanY, panY));
+            }
+
+            function applyTransform() {
+                img.style.transform = 'translate3d(' + panX + 'px,' + panY + 'px,0) scale(' + zoom + ')';
+            }
+
+            function resetPan() {
+                panX = 0;
+                panY = 0;
+            }
+
             function updateZoom() {
-                img.style.transform = 'scale(' + zoom + ')';
-                document.getElementById('ssZoomLbl').textContent = Math.round(zoom * 100) + '%';
+                clampPan();
+                applyTransform();
+                zoomLbl.textContent = Math.round(zoom * 100) + '%';
             }
 
             toolbar.querySelector('#ssZoomIn').addEventListener('click', () => {
@@ -988,6 +1020,7 @@ layoutNav($user);
             });
             toolbar.querySelector('#ssZoomFit').addEventListener('click', () => {
                 zoom = 1;
+                resetPan();
                 updateZoom();
             });
             toolbar.querySelector('#ssDownload').addEventListener('click', () => {
@@ -1005,8 +1038,47 @@ layoutNav($user);
                 updateZoom();
             }, { passive: false });
 
+            img.addEventListener('dragstart', e => e.preventDefault());
+
+            function stopPanning(e) {
+                if (!panning) return;
+                panning = false;
+                viewport.classList.remove('panning');
+                if (e && typeof e.pointerId === 'number' && viewport.hasPointerCapture && viewport.hasPointerCapture(e.pointerId)) {
+                    viewport.releasePointerCapture(e.pointerId);
+                }
+            }
+
+            viewport.addEventListener('pointerdown', e => {
+                if (e.button !== 0 && e.pointerType !== 'touch') return;
+                panning = true;
+                panLastX = e.clientX;
+                panLastY = e.clientY;
+                viewport.classList.add('panning');
+                if (viewport.setPointerCapture) viewport.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+
+            viewport.addEventListener('pointermove', e => {
+                if (!panning) return;
+                const dx = e.clientX - panLastX;
+                const dy = e.clientY - panLastY;
+                panLastX = e.clientX;
+                panLastY = e.clientY;
+                panX += dx;
+                panY += dy;
+                clampPan();
+                applyTransform();
+                e.preventDefault();
+            });
+
+            viewport.addEventListener('pointerup', stopPanning);
+            viewport.addEventListener('pointercancel', stopPanning);
+            viewport.addEventListener('lostpointercapture', stopPanning);
+
             /* Close */
             function closeModal() {
+                stopPanning();
                 overlay.classList.remove('visible');
                 setTimeout(() => overlay.remove(), 200);
             }
