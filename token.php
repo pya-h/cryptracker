@@ -446,14 +446,50 @@ layoutNav($user);
                 + ' ' + dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
         }
 
+        function graphTheme() {
+            const rootStyle = getComputedStyle(document.body);
+            const isLight = document.body.classList.contains('theme-light');
+            const cssBg = (rootStyle.getPropertyValue('--bg') || '').trim();
+            const cssCardSolid = (rootStyle.getPropertyValue('--bg-card-solid') || '').trim();
+            const cssCard = (rootStyle.getPropertyValue('--bg-card') || '').trim();
+            const cssText = (rootStyle.getPropertyValue('--text') || '').trim();
+            const cssMuted = (rootStyle.getPropertyValue('--text-muted') || '').trim();
+            const canvasBg = cssCardSolid || cssCard || cssBg;
+
+            if (isLight) {
+                return {
+                    canvasBg: canvasBg || '#ffffff',
+                    grid: 'rgba(26,29,46,0.10)',
+                    zero: 'rgba(26,29,46,0.22)',
+                    crosshair: 'rgba(26,29,46,0.16)',
+                    label: cssMuted || '#6b7084',
+                    labelActive: cssText || '#1a1d2e',
+                    title: cssText || '#1a1d2e',
+                    dotStroke: '#ffffff',
+                };
+            }
+
+            return {
+                canvasBg: canvasBg || '#181a27',
+                grid: 'rgba(255,255,255,0.06)',
+                zero: 'rgba(255,255,255,0.15)',
+                crosshair: 'rgba(255,255,255,0.13)',
+                label: cssMuted || '#7c819a',
+                labelActive: cssText || '#e4e7ef',
+                title: cssText || '#e4e7ef',
+                dotStroke: '#0b0d14',
+            };
+        }
+
         window._drawPLGraph = function(animProgress) {
             const data = window._plGraphData;
             if (!data.length) return;
 
             const hidden = window._plHiddenSeries;
             const anim = typeof animProgress === 'number' ? animProgress : 1;
+            const theme = graphTheme();
 
-            const rect = canvas.parentElement.getBoundingClientRect();
+            const rect = canvas.getBoundingClientRect();
             const W = rect.width;
             const H = 320;
             _lastW = W; _lastH = H;
@@ -470,6 +506,8 @@ layoutNav($user);
             _pad = pad; _gW = gW; _gH = gH;
 
             ctx.clearRect(0, 0, W, H);
+            ctx.fillStyle = theme.canvasBg;
+            ctx.fillRect(0, 0, W, H);
 
             /* Compute value range */
             const visibleKeys = SERIES.filter(s => !hidden.has(s.key)).map(s => s.key);
@@ -488,23 +526,32 @@ layoutNav($user);
             _minV = minV; _maxV = maxV;
 
             /* Grid */
-            ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+            ctx.strokeStyle = theme.grid;
             ctx.lineWidth = 1;
             const gridN = 5;
             for (let i = 0; i <= gridN; i++) {
                 const y = pad.top + (gH / gridN) * i;
                 ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
                 const val = maxV - ((maxV - minV) / gridN) * i;
-                ctx.fillStyle = '#7c819a';
+                ctx.fillStyle = theme.label;
                 ctx.font = '11px Inter, sans-serif';
                 ctx.textAlign = 'right';
                 ctx.fillText('$' + val.toFixed(2), pad.left - 8, y + 4);
             }
 
+            const vGridN = Math.min(8, Math.max(3, Math.floor(gW / 110)));
+            for (let i = 0; i <= vGridN; i++) {
+                const x = pad.left + (gW / vGridN) * i;
+                ctx.beginPath();
+                ctx.moveTo(x, pad.top);
+                ctx.lineTo(x, pad.top + gH);
+                ctx.stroke();
+            }
+
             /* Zero line */
             const zeroY = yPos(0);
             if (zeroY >= pad.top && zeroY <= pad.top + gH) {
-                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                ctx.strokeStyle = theme.zero;
                 ctx.setLineDash([4, 4]);
                 ctx.beginPath(); ctx.moveTo(pad.left, zeroY); ctx.lineTo(W - pad.right, zeroY); ctx.stroke();
                 ctx.setLineDash([]);
@@ -514,7 +561,7 @@ layoutNav($user);
             if (hoveredIdx >= 0 && hoveredIdx < data.length) {
                 const hx = xPos(hoveredIdx);
                 ctx.save();
-                ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+                ctx.strokeStyle = theme.crosshair;
                 ctx.lineWidth = 1;
                 ctx.setLineDash([3, 3]);
                 ctx.beginPath();
@@ -629,7 +676,7 @@ layoutNav($user);
                     ctx.arc(xPos(i), yPos(d[key]), r, 0, Math.PI * 2);
                     ctx.fillStyle = isHovered ? '#fff' : color.dot;
                     ctx.fill();
-                    ctx.strokeStyle = isHovered ? color.line : (isNow ? '#fff' : isFuture ? color.line : '#0b0d14');
+                    ctx.strokeStyle = isHovered ? color.line : (isNow ? '#fff' : isFuture ? color.line : theme.dotStroke);
                     ctx.lineWidth = isHovered ? 2.5 : (isNow ? 2 : 1.5);
                     ctx.setLineDash(isFuture && !isHovered ? [2, 2] : []);
                     ctx.stroke();
@@ -669,7 +716,7 @@ layoutNav($user);
 
             /* X-axis labels */
             if (anim >= 1) {
-                ctx.fillStyle = '#7c819a';
+                ctx.fillStyle = theme.label;
                 ctx.font = '10px Inter, sans-serif';
                 ctx.textAlign = 'center';
                 const maxLabels = Math.min(data.length, Math.floor(gW / 80));
@@ -678,7 +725,7 @@ layoutNav($user);
                     const d = data[i];
                     ctx.save();
                     if (d.is_future) ctx.globalAlpha = 0.5;
-                    if (i === hoveredIdx) { ctx.fillStyle = '#e4e7ef'; ctx.font = '600 10px Inter, sans-serif'; }
+                    if (i === hoveredIdx) { ctx.fillStyle = theme.labelActive; ctx.font = '600 10px Inter, sans-serif'; }
                     const label = d.is_now ? 'Now' : d.is_future ? 'Future' : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     ctx.fillText(label, xPos(i), H - pad.bottom + 18);
                     ctx.restore();
@@ -694,7 +741,7 @@ layoutNav($user);
             }
 
             /* Title */
-            ctx.fillStyle = '#e4e7ef';
+            ctx.fillStyle = theme.title;
             ctx.font = '600 12px Inter, sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText('P/L Over Time', pad.left, 18);
