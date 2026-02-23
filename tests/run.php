@@ -100,6 +100,7 @@ require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/json_db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/api.php';
 
 /* ── Discover and run test files ────────────────────────────── */
 
