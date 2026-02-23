@@ -48,9 +48,17 @@ function coinloreGetAll(): array
 
 function coinloreSearch(string $query): array
 {
-    $coins = coinloreGetAll();
     $query = strtolower(trim($query));
     if ($query === '') return [];
+
+    // coinloreGetAll() paginates through 50+ HTTP requests when cache is cold.
+    // Skip local-search and let other providers (with dedicated search APIs) handle it.
+    $cf = coinloreCacheFile();
+    if (!file_exists($cf) || (time() - filemtime($cf)) >= 3600) {
+        return [];
+    }
+
+    $coins = coinloreGetAll();
 
     $result = [];
     foreach ($coins as $c) {

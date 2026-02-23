@@ -37,7 +37,7 @@ layoutNav($user);
     <main class="container" data-page="dashboard"
           data-precision="<?= precision() ?>"
           data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
-          data-deferred-prices="1">
+          <?= !empty($summaries) ? 'data-deferred-prices="1"' : '' ?>>
 
         <?= renderFlashes() ?>
 
@@ -54,15 +54,23 @@ layoutNav($user);
             </div>
             <div class="summary-card stagger-3">
                 <span class="summary-label">Unrealized P/L</span>
+                <?php if (!empty($summaries)): ?>
                 <span class="summary-value" data-live="unrealized-total">
                     <span class="loading-skeleton loading-inline">&mdash;</span>
                 </span>
+                <?php else: ?>
+                <span class="summary-value"><?= formatPL(0) ?></span>
+                <?php endif; ?>
             </div>
             <div class="summary-card highlight stagger-4">
                 <span class="summary-label">Total P/L</span>
+                <?php if (!empty($summaries)): ?>
                 <span class="summary-value" data-live="total-pl-total">
                     <span class="loading-skeleton loading-inline">&mdash;</span>
                 </span>
+                <?php else: ?>
+                <span class="summary-value <?= plClass($totalRealPL) ?>"><?= formatPL($totalRealPL) ?></span>
+                <?php endif; ?>
             </div>
         </section>
 

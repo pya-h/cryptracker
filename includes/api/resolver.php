@@ -8,7 +8,13 @@ function tokenLookupIndexes(): array
     static $idx = null;
     if ($idx !== null) return $idx;
 
-    $coinlore = coinloreGetAll();
+    // Use coinlore data only when its cache is warm.
+    // coinloreGetAll() paginates through 50+ HTTP requests on cold cache;
+    // skip it here so search / ID-resolution stays fast. The coinlore
+    // indexes will simply be empty until the cache is populated.
+    $clFile = coinloreCacheFile();
+    $coinlore = (file_exists($clFile) && (time() - filemtime($clFile)) < 3600)
+        ? coinloreGetAll() : [];
     $gecko = geckoGetCoinList();
     $cmc = cmcGetAllMap();
 
