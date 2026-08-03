@@ -49,6 +49,12 @@ Most crypto trackers are either bloated SaaS platforms that harvest your data, o
 - **Customization** — Configurable decimal precision, worthless-zero display, and trim-zero formatting
 - **Export** — Download portfolio data as CSV or JSON
 
+### Progressive Web App
+- **Installable** — Add to home screen / desktop with its own icon and standalone window
+- **Offline shell** — Service worker caches static assets and fonts; shows a branded offline page when the network drops
+- **Security-aware caching** — Authenticated HTML and live price/JSON endpoints are **never** cached (no cross-user data leaks); only versioned static assets are
+- **Dependency-free icons** — Launcher/maskable PNGs generated in pure PHP (no GD/ImageMagick)
+
 ### Security
 - **bcrypt password hashing** (cost 12)
 - **CSRF protection** on all POST forms
@@ -122,10 +128,15 @@ cryptracker/                        # ← project root (repo)
 │   ├── login.php                   # Login page
 │   ├── register.php                # Registration page
 │   ├── logout.php                  # Logout handler
+│   ├── manifest.webmanifest        # PWA manifest (name, icons, theme)
+│   ├── service-worker.js           # PWA offline caching (security-aware)
+│   ├── offline.html                # Offline fallback page
 │   └── assets/
 │       ├── app.js                  # Live refresh, search, UI interactions
 │       ├── graph.js                # Canvas P/L graph + screenshot system
-│       └── style.css               # Theme, layout, glassmorphism, animations
+│       ├── pwa.js                  # Service worker registration
+│       ├── style.css               # Theme, layout, glassmorphism, animations
+│       └── pwa/                    # App icons (192/512/maskable PNG + favicon.svg)
 │
 └── cryptracker/                    # ← PRIVATE CORE (keep OUTSIDE the web root)
     ├── .htaccess                   # Deny-all defense-in-depth
@@ -154,6 +165,9 @@ cryptracker/                        # ← project root (repo)
     │   │       ├── coingecko.php   # CoinGecko provider
     │   │       ├── resolver.php    # Cross-provider token ID resolution
     │   │       └── orchestrator.php   # Multi-source fallback & search
+    │
+    ├── tools/
+    │   └── generate_pwa_icons.php  # Pure-PHP PWA icon generator (no image libs)
     │
     ├── tests/                      # 88 tests / 277 assertions
     │   ├── run.php                 # Test runner (autodiscovers Test*.php)

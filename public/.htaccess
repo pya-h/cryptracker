@@ -15,3 +15,18 @@ Options -Indexes
         Deny from all
     </IfModule>
 </FilesMatch>
+
+# --- PWA support ---
+# Serve the web app manifest with the correct MIME type.
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+# Keep the service worker fresh so app updates roll out promptly, and allow it
+# to control the whole origin.
+<Files "service-worker.js">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-cache, max-age=0, must-revalidate"
+        Header set Service-Worker-Allowed "/"
+    </IfModule>
+</Files>

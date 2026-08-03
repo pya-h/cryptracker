@@ -9,16 +9,30 @@ function layoutHead(string $title, bool $authPage = false): void
     $themeClass = theme() === 'light' ? 'theme-light' : '';
     $classes = trim(($authPage ? 'auth-page' : '') . ' ' . $themeClass);
     $bodyAttr = $classes ? 'class="' . $classes . '"' : '';
+    $publicDir = __DIR__ . '/../../../public';
+    $themeColor = theme() === 'light' ? '#ffffff' : '#0b0d14';
     echo '<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>' . e($title) . ' – ' . e(APP_NAME) . '</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=' . filemtime(__DIR__ . '/../../../public/assets/style.css') . '">
+    <link rel="stylesheet" href="assets/style.css?v=' . filemtime($publicDir . '/assets/style.css') . '">
+
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="' . $themeColor . '">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="' . e(APP_NAME) . '">
+    <link rel="icon" type="image/svg+xml" href="assets/pwa/favicon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/pwa/icon-192.png">
+    <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
+    <script defer src="assets/pwa.js?v=' . filemtime($publicDir . '/assets/pwa.js') . '"></script>
+
     <meta name="csrf-token" content="' . e(csrfToken()) . '">
 </head>
 <body ' . $bodyAttr . '>';

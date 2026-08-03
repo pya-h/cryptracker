@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#7c6aef">
+    <title>Offline – CrypTracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0b0d14;
+            color: #e4e7ef;
+            font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            text-align: center;
+            padding: 1.5rem;
+        }
+        .offline-card {
+            max-width: 24rem;
+            background: #161926;
+            border: 1px solid rgba(255, 255, 255, .06);
+            border-radius: 1.25rem;
+            padding: 2.5rem 2rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+        }
+        .diamond {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 1.5rem;
+            display: block;
+        }
+        h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .6rem; }
+        p { color: #7c819a; line-height: 1.6; font-size: .95rem; }
+        button {
+            margin-top: 1.75rem;
+            padding: .7rem 1.6rem;
+            font-size: .95rem;
+            font-weight: 600;
+            color: #fff;
+            background: linear-gradient(135deg, #7c6aef, #9584ff);
+            border: none;
+            border-radius: .7rem;
+            cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease;
+        }
+        button:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124, 106, 239, .35); }
+    </style>
+</head>
+<body>
+    <div class="offline-card">
+        <svg class="diamond" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="100" height="100" rx="24" fill="#6c5ce7"/>
+            <path d="M50 18 L82 50 L50 82 L18 50 Z" stroke="#fff" stroke-width="7" fill="none"/>
+            <path d="M50 40 L60 50 L50 60 L40 50 Z" fill="#fff"/>
+        </svg>
+        <h1>You're offline</h1>
+        <p>CrypTracker needs a connection to load live prices and your portfolio. Check your network and try again.</p>
+        <button onclick="location.reload()">Retry</button>
+    </div>
+</body>
+</html>
