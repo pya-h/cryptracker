@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/../cryptracker/includes/auth.php';
+require_once __DIR__ . '/../cryptracker/includes/helpers.php';
 
 if (currentUser()) { header('Location: index.php'); exit; }
 

@@ -6,9 +6,9 @@
  * GET ?page=token&id=N&part=analytics    — exports token analytics timeline
  */
 
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/api.php';
-require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/../cryptracker/includes/auth.php';
+require_once __DIR__ . '/../cryptracker/includes/api.php';
+require_once __DIR__ . '/../cryptracker/includes/helpers.php';
 
 $user = requireAuth();
 

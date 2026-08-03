@@ -4,8 +4,8 @@
  * POST endpoint — stores preferences in session or updates user record.
  */
 
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/../cryptracker/includes/auth.php';
+require_once __DIR__ . '/../cryptracker/includes/helpers.php';
 
 $user = requireAuth();
 

@@ -4,9 +4,9 @@
  * POST: cmc_id, symbol, name, slug
  */
 
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/helpers.php';
-require_once __DIR__ . '/includes/api.php';
+require_once __DIR__ . '/../cryptracker/includes/auth.php';
+require_once __DIR__ . '/../cryptracker/includes/helpers.php';
+require_once __DIR__ . '/../cryptracker/includes/api.php';
 
 $user = requireAuth();
 

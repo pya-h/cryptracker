@@ -4,8 +4,8 @@
  * P/L on sell uses the active mode (avg or fifo).
  */
 
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/../cryptracker/includes/auth.php';
+require_once __DIR__ . '/../cryptracker/includes/helpers.php';
 
 $user = requireAuth();
 

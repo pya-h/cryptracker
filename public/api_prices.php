@@ -5,8 +5,8 @@
  * Returns JSON: { "90": { "price": 95432.10, "percent_change_24h": 1.23 }, ... }
  */
 
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/api.php';
+require_once __DIR__ . '/../cryptracker/includes/auth.php';
+require_once __DIR__ . '/../cryptracker/includes/api.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');

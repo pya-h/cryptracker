@@ -7,8 +7,8 @@
 Track tokens, record trades, compute profit & loss, and view live prices — all without frameworks, npm, or external dependencies.
 
 [![PHP 8.0+](https://img.shields.io/badge/PHP-8.0%2B-777BB4?logo=php&logoColor=white)](https://php.net)
-[![Tests](https://img.shields.io/badge/tests-88%20passed-brightgreen)](tests/run.php)
-[![Assertions](https://img.shields.io/badge/assertions-277-blue)](tests/run.php)
+[![Tests](https://img.shields.io/badge/tests-88%20passed-brightgreen)](cryptracker/tests/run.php)
+[![Assertions](https://img.shields.io/badge/assertions-277-blue)](cryptracker/tests/run.php)
 [![License](https://img.shields.io/badge/license-MIT-green)](#license)
 
 </div>
@@ -77,81 +77,96 @@ Most crypto trackers are either bloated SaaS platforms that harvest your data, o
 git clone <your-repo-url> cryptracker
 cd cryptracker
 
-# Copy environment config
-cp .env.example .env
+# Copy environment config (lives in the private core folder)
+cp cryptracker/.env.example cryptracker/.env
 
-# (Optional) Add your CoinMarketCap API key in .env
+# (Optional) Add your CoinMarketCap API key in cryptracker/.env
 # CMC_API_KEY=your-key-here
 
-# Start the development server
-php -S 0.0.0.0:8080
+# Start the development server with the web root pointed at public/
+php -S 0.0.0.0:8080 -t public
 
 # Open http://localhost:8080 and register an account
 ```
+
+> **Deployment (cPanel / shared hosting):** map the **contents of `public/`** to your
+> web root (e.g. `public_html`) and keep the `cryptracker/` folder **outside** the web
+> root, as a sibling of it. Only `public/` is ever served; all backend code, secrets
+> (`.env`), and stored data stay private. Both folders also ship a defensive `.htaccess`
+> as a second layer in case of a docroot misconfiguration.
 
 ---
 
 ## Project Structure
 
+The project is split into two top-level folders for security: **`public/`** (the only
+folder served by the web server) and **`cryptracker/`** (the private core — backend
+logic, secrets, and data — kept **outside** the web root).
+
 ```
-cryptracker/
-├── index.php                   # Portfolio dashboard
-├── token.php                   # Single-token analytics, graph, trades
-├── transaction.php             # Buy/sell POST handler
-├── add_token.php               # Add token POST handler
-├── remove_token.php            # Remove token POST handler
-├── search_tokens.php           # AJAX coin search endpoint
-├── api_prices.php              # AJAX live price endpoint
-├── save_settings.php           # User preferences handler
-├── toggle_mode.php             # FIFO ↔ AVG mode switch
-├── export_csv.php              # CSV export
-├── export_json.php             # JSON export
-├── login.php                   # Login page
-├── register.php                # Registration page
-├── logout.php                  # Logout handler
+cryptracker/                        # ← project root (repo)
 │
-├── includes/                   # Core PHP logic
-│   ├── config.php              # Env loader, session bootstrap
-│   ├── db.php                  # DB strategy dispatcher
-│   ├── sqlite_db.php           # SQLite storage implementation
-│   ├── json_db.php             # JSON flat-file storage implementation
-│   ├── auth.php                # Register, login, logout, current user
-│   ├── helpers.php             # Wrapper — loads 6 sub-modules ↓
-│   │   └── helpers/
-│   │       ├── security.php    # CSRF tokens, XSS escaping, headers
-│   │       ├── formatting.php  # USD, crypto, P/L, percent formatting
-│   │       ├── preferences.php # Theme, precision, P/L mode, source
-│   │       ├── pl_engine.php   # FIFO & weighted-average P/L calc
-│   │       ├── flash.php       # Flash message system
-│   │       └── layout.php      # HTML head, nav, footer rendering
-│   ├── api.php                 # Wrapper — loads 6 sub-modules ↓
-│   │   └── api/
-│   │       ├── common.php      # Source management, HTTP client
-│   │       ├── coinmarketcap.php  # CMC provider
-│   │       ├── coinlore.php    # CoinLore provider
-│   │       ├── coingecko.php   # CoinGecko provider
-│   │       ├── resolver.php    # Cross-provider token ID resolution
-│   │       └── orchestrator.php   # Multi-source fallback & search
+├── public/                         # ← WEB ROOT (map its contents to public_html)
+│   ├── .htaccess                   # -Indexes + block dotfiles/sensitive extensions
+│   ├── index.php                   # Portfolio dashboard
+│   ├── token.php                   # Single-token analytics, graph, trades
+│   ├── transaction.php             # Buy/sell POST handler
+│   ├── add_token.php               # Add token POST handler
+│   ├── remove_token.php            # Remove token POST handler
+│   ├── search_tokens.php           # AJAX coin search endpoint
+│   ├── api_prices.php              # AJAX live price endpoint
+│   ├── save_settings.php           # User preferences handler
+│   ├── toggle_mode.php             # FIFO ↔ AVG mode switch
+│   ├── export_csv.php              # CSV export
+│   ├── export_json.php             # JSON export
+│   ├── login.php                   # Login page
+│   ├── register.php                # Registration page
+│   ├── logout.php                  # Logout handler
+│   └── assets/
+│       ├── app.js                  # Live refresh, search, UI interactions
+│       ├── graph.js                # Canvas P/L graph + screenshot system
+│       └── style.css               # Theme, layout, glassmorphism, animations
 │
-├── assets/
-│   ├── app.js                  # Live refresh, search, UI interactions
-│   ├── graph.js                # Canvas P/L graph + screenshot system
-│   └── style.css               # Theme, layout, glassmorphism, animations
-│
-├── tests/                      # 88 tests / 277 assertions
-│   ├── run.php                 # Test runner (autodiscovers Test*.php)
-│   ├── TestAuth.php            # Authentication tests
-│   ├── TestDb.php              # Database layer tests
-│   ├── TestPL.php              # P/L calculation tests (FIFO + AVG)
-│   ├── TestSecurity.php        # CSRF, XSS, formatting, flash tests
-│   ├── TestPreferences.php     # User preference helpers tests
-│   ├── TestFormatting.php      # Number formatting tests
-│   ├── TestApiCommon.php       # API utility & source management tests
-│   └── TestLayout.php          # HTML layout rendering tests
-│
-├── database/                   # Auto-created data files (gitignored)
-├── .env.example                # Environment config template
-└── .gitignore
+└── cryptracker/                    # ← PRIVATE CORE (keep OUTSIDE the web root)
+    ├── .htaccess                   # Deny-all defense-in-depth
+    ├── .env                        # Secrets (gitignored)
+    ├── .env.example                # Environment config template
+    │
+    ├── includes/                   # Core PHP logic
+    │   ├── config.php              # Env loader, session bootstrap
+    │   ├── db.php                  # DB strategy dispatcher
+    │   ├── sqlite_db.php           # SQLite storage implementation
+    │   ├── json_db.php             # JSON flat-file storage implementation
+    │   ├── auth.php                # Register, login, logout, current user
+    │   ├── helpers.php             # Wrapper — loads 6 sub-modules ↓
+    │   │   └── helpers/
+    │   │       ├── security.php    # CSRF tokens, XSS escaping, headers
+    │   │       ├── formatting.php  # USD, crypto, P/L, percent formatting
+    │   │       ├── preferences.php # Theme, precision, P/L mode, source
+    │   │       ├── pl_engine.php   # FIFO & weighted-average P/L calc
+    │   │       ├── flash.php       # Flash message system
+    │   │       └── layout.php      # HTML head, nav, footer rendering
+    │   ├── api.php                 # Wrapper — loads 6 sub-modules ↓
+    │   │   └── api/
+    │   │       ├── common.php      # Source management, HTTP client
+    │   │       ├── coinmarketcap.php  # CMC provider
+    │   │       ├── coinlore.php    # CoinLore provider
+    │   │       ├── coingecko.php   # CoinGecko provider
+    │   │       ├── resolver.php    # Cross-provider token ID resolution
+    │   │       └── orchestrator.php   # Multi-source fallback & search
+    │
+    ├── tests/                      # 88 tests / 277 assertions
+    │   ├── run.php                 # Test runner (autodiscovers Test*.php)
+    │   ├── TestAuth.php            # Authentication tests
+    │   ├── TestDb.php              # Database layer tests
+    │   ├── TestPL.php              # P/L calculation tests (FIFO + AVG)
+    │   ├── TestSecurity.php        # CSRF, XSS, formatting, flash tests
+    │   ├── TestPreferences.php     # User preference helpers tests
+    │   ├── TestFormatting.php      # Number formatting tests
+    │   ├── TestApiCommon.php       # API utility & source management tests
+    │   └── TestLayout.php          # HTML layout rendering tests
+    │
+    └── database/                   # Auto-created data files (gitignored)
 ```
 
 ---
@@ -159,7 +174,7 @@ cryptracker/
 ## Running Tests
 
 ```bash
-php tests/run.php
+php cryptracker/tests/run.php
 ```
 
 Tests use an isolated temporary data directory and clean up after themselves.
