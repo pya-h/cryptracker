@@ -59,7 +59,7 @@ switch ($action) {
             break;
         }
         $existing = dbGetUserByField('username', $newName);
-        if ($existing && $existing['id'] !== $user['id']) {
+        if ($existing && (int) $existing['id'] !== (int) $user['id']) {
             flash('error', 'Username already taken.');
             break;
         }
@@ -80,6 +80,11 @@ switch ($action) {
         }
         $hash = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 12]);
         dbUpdateUser($user['id'], ['password_hash' => $hash]);
+        // Rotate the session ID so any previously captured session cookie is
+        // invalidated once the credentials change.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
         flash('success', 'Password updated successfully.');
         break;
 

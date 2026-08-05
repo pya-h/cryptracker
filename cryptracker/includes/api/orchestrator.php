@@ -90,7 +90,11 @@ function apiGetQuotesDetailed(array $ids, bool $trackPreferredFailures = false):
         }
     }
 
-    $preferredSuccess = $preferredCount >= count($ids);
+    // The preferred source "succeeded" if it returned ANY quotes — i.e. it is
+    // reachable and working. Requiring it to return EVERY requested id would
+    // wrongly count a healthy source as failed whenever the user tracks a coin
+    // that source simply doesn't list, spuriously auto-switching away from it.
+    $preferredSuccess = $preferredCount > 0;
     $switchMeta = ['auto_switched' => false, 'new_source' => $preferredBefore, 'failure_count' => 0, 'toast_message' => ''];
 
     if ($trackPreferredFailures) {
