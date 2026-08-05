@@ -69,6 +69,14 @@ if (php_sapi_name() !== 'cli' && session_status() === PHP_SESSION_NONE) {
     }
     if (is_dir($sessionDir) && is_writable($sessionDir)) {
         session_save_path($sessionDir);
+
+        // Some distros (Debian/Ubuntu) ship with session.gc_probability = 0 and
+        // clean the DEFAULT session dir via a system cron instead. That cron
+        // does not know about our custom directory, so expired session files
+        // here would pile up forever. Enable PHP's own probabilistic GC (~1% of
+        // requests) so our private session store gets cleaned up.
+        ini_set('session.gc_probability', '1');
+        ini_set('session.gc_divisor', '100');
     }
 
     session_set_cookie_params([

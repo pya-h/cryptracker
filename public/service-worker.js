@@ -47,16 +47,39 @@ self.addEventListener('activate', event => {
     );
 });
 
-async function staleWhileRevalidate(request, cacheName) {
-    const cache = await caches.open(cacheName);
+/* Drop older cached versions of the same asset (same path, different ?v=). */
+async function pruneOldVersions(cache, request) {
+    const url = new URL(request.url);
+    const keys = await cache.keys();
+    await Promise.all(keys.map(key => {
+        const k = new URL(key.url);
+        if (k.origin === url.origin && k.pathname === url.pathname && k.search !== url.search) {
+            return cache.delete(key);
+        }
+        return null;
+    }));
+}
+
+async function staleWhileRevalidate(event) {
+    const request = event.request;
+    const cache = await caches.open(RUNTIME);
     const cached = await cache.match(request);
-    const network = fetch(request).then(response => {
+
+    const networkPromise = fetch(request).then(async response => {
         if (response && response.status === 200 && response.type === 'basic') {
-            cache.put(request, response.clone());
+            await cache.put(request, response.clone());
+            await pruneOldVersions(cache, request);
         }
         return response;
-    }).catch(() => cached);
-    return cached || network;
+    }).catch(() => undefined);
+
+    // Keep the worker alive so background caching/pruning finishes even when we
+    // respond immediately from cache.
+    event.waitUntil(networkPromise.catch(() => {}));
+
+    if (cached) return cached;
+    const network = await networkPromise;
+    return network || Response.error();
 }
 
 async function cacheFirst(request, cacheName) {
@@ -86,7 +109,13 @@ self.addEventListener('fetch', event => {
     // 1. Page navigations: network-first, offline page on failure. Never cached.
     if (request.mode === 'navigate') {
         event.respondWith(
-            fetch(request).catch(() => caches.match('offline.html', { ignoreSearch: true }))
+            fetch(request).catch(async () => {
+                const offline = await caches.match('offline.html', { ignoreSearch: true });
+                return offline || new Response(
+                    'You are offline.',
+                    { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+                );
+            })
         );
         return;
     }
@@ -99,7 +128,7 @@ self.addEventListener('fetch', event => {
 
     // 3. Static app assets: stale-while-revalidate.
     if (sameOrigin && url.pathname.includes('/assets/')) {
-        event.respondWith(staleWhileRevalidate(request, RUNTIME));
+        event.respondWith(staleWhileRevalidate(event));
         return;
     }
 
