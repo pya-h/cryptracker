@@ -7,8 +7,8 @@
 Track tokens, record trades, compute profit & loss, and view live prices — all without frameworks, npm, or external dependencies.
 
 [![PHP 8.0+](https://img.shields.io/badge/PHP-8.0%2B-777BB4?logo=php&logoColor=white)](https://php.net)
-[![Tests](https://img.shields.io/badge/tests-106%20passed-brightgreen)](cryptracker/tests/run.php)
-[![Assertions](https://img.shields.io/badge/assertions-343-blue)](cryptracker/tests/run.php)
+[![Tests](https://img.shields.io/badge/tests-121%20passed-brightgreen)](cryptracker/tests/run.php)
+[![Assertions](https://img.shields.io/badge/assertions-371-blue)](cryptracker/tests/run.php)
 [![License](https://img.shields.io/badge/license-MIT-green)](#license)
 
 </div>
@@ -44,6 +44,7 @@ Most crypto trackers are either bloated SaaS platforms that harvest your data, o
 - **Smart caching** — Provider coin lists cached (1h–24h) to avoid redundant API calls
 
 ### User Experience
+- **Multi-currency display** — View every value (holdings, P/L, prices) in USD, Toman/IRT, EUR, CAD, GBP, AED or TRY via a navbar switch; free-market (Toman-based) rates, display-only conversion (stored data stays in USD)
 - **Dark & light themes** — Full theme support with glassmorphism and smooth animations
 - **Responsive design** — Works on desktop, tablet, and mobile
 - **Count-up animations** — P/L values animate on page load
@@ -160,6 +161,7 @@ cryptracker/                        # ← project root (repo)
     │   │       ├── preferences.php # Theme, precision, P/L mode, source
     │   │       ├── pl_engine.php   # FIFO & weighted-average P/L calc
     │   │       ├── swap.php        # Value-conserving token-to-token conversion
+    │   │       ├── currency.php    # Display-currency conversion (USD → Toman/EUR/…)
     │   │       ├── undo.php        # Single-step undo of the last buy/sell/swap
     │   │       ├── flash.php       # Flash message system
     │   │       └── layout.php      # HTML head, nav, footer rendering
@@ -175,12 +177,13 @@ cryptracker/                        # ← project root (repo)
     ├── tools/
     │   └── generate_pwa_icons.php  # Pure-PHP PWA icon generator (no image libs)
     │
-    ├── tests/                      # 106 tests / 343 assertions
+    ├── tests/                      # 121 tests / 371 assertions
     │   ├── run.php                 # Test runner (autodiscovers Test*.php)
     │   ├── TestAuth.php            # Authentication tests
     │   ├── TestDb.php              # Database layer tests
     │   ├── TestPL.php              # P/L calculation tests (FIFO + AVG)
     │   ├── TestSwap.php            # Token swap / conversion tests
+    │   ├── TestCurrency.php        # Display-currency conversion tests
     │   ├── TestUndo.php            # Undo-last-action tests
     │   ├── TestSecurity.php        # CSRF, XSS, formatting, flash tests
     │   ├── TestPreferences.php     # User preference helpers tests
@@ -203,7 +206,7 @@ Tests use an isolated temporary data directory and clean up after themselves.
 
 ```
 ══════════════════════════════════════════════
-  Passed: 343
+  Passed: 371
   Failed: 0
 ══════════════════════════════════════════════
 ```
@@ -215,6 +218,7 @@ Tests use an isolated temporary data directory and clean up after themselves.
 | **P/L Calculations** | 15 | FIFO, weighted-avg, partial sell, cross-lot, break-even, timeline |
 | **Token Swaps** | 9 | Value conservation, FIFO/avg realized P/L, notes, holdings & ownership guards |
 | **Undo** | 9 | Buy/sell/swap revert, single-use, latest-only & ownership guards, P/L restoration |
+| **Currency** | 15 | Factor math (USD/IRT/EUR cross-rate), formatting, cookie resolution, missing-rate fallback |
 | **Security** | 12 | CSRF tokens, XSS escaping, password hashing, flash messages |
 | **Preferences** | 14 | Theme, precision, P/L mode, source selection, defaults, fallbacks |
 | **Formatting** | 11 | Big numbers, supply, form values, worthless zeros |

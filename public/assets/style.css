@@ -587,6 +587,10 @@ select {
     font-size: .76rem;
 }
 
+/* Display-currency controls */
+.settings-select { margin-top: .35rem; }
+.currency-toggle .mode-label { min-width: 2.6rem; text-align: center; }
+
 input:focus {
     outline: none;
     border-color: var(--primary);

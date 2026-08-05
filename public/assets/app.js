@@ -170,6 +170,39 @@ document.addEventListener('DOMContentLoaded', () => {
        Duration ~2s with easeOutExpo for a satisfying finish.
        ═══════════════════════════════════════════════════════ */
 
+    /* ── Active display-currency helpers ──────────────────────
+       Every monetary value the app computes is in USD. Conversion
+       happens ONLY here (and in the money formatters below) by a
+       single multiply, so percentages / quantities are never touched.
+       Reads data-cur-* from <main> (querySelector keeps it safe even
+       before the `main` const below is initialised). */
+    let _curMeta = null;
+    function cur() {
+        if (_curMeta) return _curMeta;
+        const m = document.querySelector('main[data-page]');
+        if (!m) return { factor: 1, symbol: '$', pos: 'prefix', decimals: null };
+        _curMeta = {
+            factor: parseFloat(m.dataset.curFactor) || 1,
+            symbol: m.dataset.curSymbol || '$',
+            pos: m.dataset.curPos || 'prefix',
+            decimals: (m.dataset.curDecimals !== '' && m.dataset.curDecimals != null) ? parseInt(m.dataset.curDecimals) : null,
+        };
+        return _curMeta;
+    }
+    function curBasePrec() {
+        const m = document.querySelector('main[data-page]');
+        return (m && parseInt(m.dataset.precision)) || 3;
+    }
+    function curFmt(vUSD, isPL, dec) {
+        const c = cur();
+        const val = (vUSD || 0) * c.factor;
+        const d = (c.decimals !== null) ? c.decimals : (dec != null ? dec : curBasePrec());
+        const num = Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+        const body = (c.pos === 'suffix') ? (num + ' ' + c.symbol) : (c.symbol + num);
+        if (isPL) return trimZerosJS((val >= 0 ? '+' : '-') + body);
+        return trimZerosJS((val < 0 ? '-' : '') + body);
+    }
+
     function countUp(el) {
         const raw = parseFloat(el.dataset.countup);
         if (isNaN(raw) || raw === 0) return;
@@ -206,10 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatVal(v, isPL, prefix, dec) {
-        const abs = Math.abs(v);
-        const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-        if (isPL) return (v >= 0 ? '+$' : '-$') + formatted;
-        return prefix + formatted;
+        // Currency-aware; `prefix` is legacy and ignored (symbol comes from cur()).
+        return curFmt(v, isPL, dec);
     }
 
     document.querySelectorAll('[data-countup]').forEach(countUp);
@@ -304,13 +335,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function plClassJS(v) { return v >= 0 ? 'profit' : 'loss'; }
 
     function formatUSD(v, dec) {
-        const raw = '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-        return trimZerosJS(raw);
+        // Name kept for call sites; value is USD, rendered in the active currency.
+        return curFmt(v, false, dec);
     }
 
     function formatPLJS(v, dec) {
-        const abs = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-        return trimZerosJS((v >= 0 ? '+$' : '-$') + abs);
+        return curFmt(v, true, dec);
     }
 
     function formatPercentJS(v, dec) {
@@ -319,7 +349,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function trimZerosJS(s) {
-        if (!main || main.dataset.worthlessZeros === '1') return s;
+        const m = document.querySelector('main[data-page]');
+        if (!m || m.dataset.worthlessZeros === '1') return s;
         return s.replace(/\d+\.\d+/g, m => {
             let t = m.replace(/0+$/, '');
             if (t.endsWith('.')) t = t.slice(0, -1);
@@ -372,8 +403,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const newCurrVal = holdings * newPrice;
             const avgBuy = holdings > 0 ? costBasis / holdings : 0;
             const newUnreal = newCurrVal - costBasis;
-            const realPLtd = row.querySelector('td:nth-child(7)');
-            const realVal = parsePLText(realPLtd?.textContent || '+$0');
+            // Realized P/L is read from a raw-USD data attribute (never from the
+            // rendered cell, which may be currency-converted) so the USD math holds.
+            const realVal = parseFloat(row.dataset.realizedPl) || 0;
             const newTotal = realVal + newUnreal;
 
             const priceEl = row.querySelector('[data-live="price"]');
@@ -613,13 +645,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function parsePLText(text) {
-        const cleaned = text.replace(/[^0-9.+-]/g, '').trim();
-        if (!cleaned) return 0;
-        const val = parseFloat(cleaned);
-        return text.includes('-$') ? -Math.abs(val) : val;
-    }
-
     let refreshInFlight = false;
     let lastAutoSwitchToken = '';
 
@@ -661,6 +686,42 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gatherCmcIds().length > 0) {
         refreshPrices();
         setInterval(refreshPrices, 10000);
+    }
+
+    /* ── Display-currency switch (client-owned, cookie-persisted) ──────
+       The navbar toggle flips between USD and the dynamic slot; the
+       settings <select> also redefines that slot. Both persist to a
+       1-year cookie and reload so the server re-renders flash-free.
+       Wired via addEventListener (no inline handlers → CSP-clean). */
+    function setCurCookie(name, val) {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() + 1);
+        document.cookie = name + '=' + encodeURIComponent(val) + ';expires=' + d.toUTCString() + ';path=/;samesite=strict';
+    }
+
+    const curToggle = document.getElementById('currencyToggle');
+    if (curToggle) {
+        curToggle.addEventListener('click', () => {
+            const current = (curToggle.dataset.curCurrent || 'usd').toLowerCase();
+            const secondary = (curToggle.dataset.curSecondary || 'irt').toLowerCase();
+            setCurCookie('display_currency', current === 'usd' ? secondary : 'usd');
+            location.reload();
+        });
+    }
+
+    const curSelect = document.getElementById('displayCurrencySelect');
+    if (curSelect) {
+        curSelect.addEventListener('change', () => {
+            const val = (curSelect.value || 'usd').toLowerCase();
+            if (val === 'usd') {
+                setCurCookie('display_currency', 'usd');
+            } else {
+                // A non-USD choice becomes the dynamic slot AND the active display.
+                setCurCookie('secondary_currency', val);
+                setCurCookie('display_currency', val);
+            }
+            location.reload();
+        });
     }
 
     /* ── Token Search ─────────────────────────────────────── */

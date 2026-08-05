@@ -37,6 +37,7 @@ layoutNav($user);
     <main class="container" data-page="dashboard"
           data-precision="<?= precision() ?>"
           data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
+          <?= currencyDataAttrs() ?>
           <?= !empty($summaries) ? 'data-deferred-prices="1"' : '' ?>>
 
         <?= renderFlashes() ?>
@@ -44,12 +45,12 @@ layoutNav($user);
         <section class="portfolio-summary">
             <div class="summary-card stagger-1">
                 <span class="summary-label">Total Invested</span>
-                <span class="summary-value" data-countup="<?= $totalInvested ?>" data-prefix="$"><?= formatUSD($totalInvested) ?></span>
+                <span class="summary-value" data-countup="<?= $totalInvested ?>"><?= formatMoney($totalInvested) ?></span>
             </div>
             <div class="summary-card stagger-2">
                 <span class="summary-label">Realized P/L</span>
                 <span class="summary-value <?= plClass($totalRealPL) ?>" data-countup="<?= $totalRealPL ?>" data-pl="1">
-                    <?= formatPL($totalRealPL) ?>
+                    <?= formatMoneyPL($totalRealPL) ?>
                 </span>
             </div>
             <div class="summary-card stagger-3">
@@ -59,7 +60,7 @@ layoutNav($user);
                     <span class="loading-skeleton loading-inline">&mdash;</span>
                 </span>
                 <?php else: ?>
-                <span class="summary-value"><?= formatPL(0) ?></span>
+                <span class="summary-value"><?= formatMoneyPL(0) ?></span>
                 <?php endif; ?>
             </div>
             <div class="summary-card highlight stagger-4">
@@ -69,7 +70,7 @@ layoutNav($user);
                     <span class="loading-skeleton loading-inline">&mdash;</span>
                 </span>
                 <?php else: ?>
-                <span class="summary-value <?= plClass($totalRealPL) ?>"><?= formatPL($totalRealPL) ?></span>
+                <span class="summary-value <?= plClass($totalRealPL) ?>"><?= formatMoneyPL($totalRealPL) ?></span>
                 <?php endif; ?>
             </div>
         </section>
@@ -107,7 +108,8 @@ layoutNav($user);
                         <tr class="clickable-row" data-href="token.php?id=<?= (int)$s['token']['id'] ?>"
                             data-cmc-id="<?= (int)$s['token']['cmc_id'] ?>"
                             data-holdings="<?= $s['holdings'] ?>"
-                            data-cost-basis="<?= $s['invested'] ?>">
+                            data-cost-basis="<?= $s['invested'] ?>"
+                            data-realized-pl="<?= $s['realizedPL'] ?>">
                             <td>
                                 <strong><?= e($s['token']['symbol']) ?></strong>
                                 <small><?= e($s['token']['name']) ?></small>
@@ -115,10 +117,10 @@ layoutNav($user);
                             <td data-live="price"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td data-live="change24"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td><?= formatCrypto($s['holdings']) ?></td>
-                            <td><?= formatUSD($s['avgBuy']) ?></td>
+                            <td><?= formatMoney($s['avgBuy']) ?></td>
                             <td data-live="currentVal"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td class="<?= plClass($s['realizedPL']) ?>">
-                                <?= formatPL($s['realizedPL']) ?>
+                                <?= formatMoneyPL($s['realizedPL']) ?>
                             </td>
                             <td data-live="unrealizedPL"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td data-live="totalPL"><span class="loading-skeleton loading-inline">&mdash;</span></td>

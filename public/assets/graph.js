@@ -56,11 +56,26 @@
             });
         }
 
+        /* Active display currency (values in _plGraphData are USD; convert to show).
+           Read live from <main> so it reflects the current selection each draw. */
+        function _cur() {
+            const m = document.querySelector('main[data-page]');
+            return {
+                factor: m ? (parseFloat(m.dataset.curFactor) || 1) : 1,
+                symbol: m ? (m.dataset.curSymbol || '$') : '$',
+                pos: m ? (m.dataset.curPos || 'prefix') : 'prefix',
+                decimals: (m && m.dataset.curDecimals !== '' && m.dataset.curDecimals != null) ? parseInt(m.dataset.curDecimals) : null,
+            };
+        }
+
         /* Format value for tooltip */
         function fmtVal(v) {
-            const abs = Math.abs(v);
-            const s = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            return (v >= 0 ? '+$' : '-$') + s;
+            const c = _cur();
+            const val = v * c.factor;
+            const dec = (c.decimals !== null) ? c.decimals : 2;
+            const s = Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+            const body = (c.pos === 'suffix') ? (s + ' ' + c.symbol) : (c.symbol + s);
+            return (val >= 0 ? '+' : '-') + body;
         }
 
         function fmtDate(d) {
@@ -161,7 +176,9 @@
                 ctx.fillStyle = theme.label;
                 ctx.font = '11px Inter, sans-serif';
                 ctx.textAlign = 'right';
-                ctx.fillText('$' + val.toFixed(2), pad.left - 8, y + 4);
+                const _c = _cur();
+                const _av = (val * _c.factor).toFixed(_c.decimals !== null ? _c.decimals : 2);
+                ctx.fillText(_c.pos === 'suffix' ? (_av + ' ' + _c.symbol) : (_c.symbol + _av), pad.left - 8, y + 4);
             }
 
             const vGridN = Math.min(8, Math.max(3, Math.floor(gW / 110)));

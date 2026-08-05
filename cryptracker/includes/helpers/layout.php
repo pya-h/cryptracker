@@ -51,6 +51,10 @@ function layoutNav(array $user): void
     $src = priceSource();
     $srcLabel = priceSourceLabel($src);
 
+    $curActive      = currencyActiveCode();
+    $curSecondary   = currencySecondaryCode();
+    $curIsSecondary = $curActive !== 'usd';
+
     echo '<nav class="navbar animate-slide-down">
         <a href="index.php" class="nav-brand">
             <span class="brand-icon">◈</span> ' . e(APP_NAME) . '
@@ -60,6 +64,14 @@ function layoutNav(array $user): void
                 <span class="source-dot"></span>
                 <span class="source-text">' . e($srcLabel) . '</span>
             </div>
+            <button type="button" class="mode-toggle currency-toggle" id="currencyToggle"
+                    data-cur-current="' . e($curActive) . '" data-cur-secondary="' . e($curSecondary) . '"
+                    data-tooltip="Display currency">
+                <span class="mode-label" id="currencyToggleLabel">' . e(strtoupper($curActive)) . '</span>
+                <span class="mode-switch ' . ($curIsSecondary ? 'active' : '') . '">
+                    <span class="mode-knob"></span>
+                </span>
+            </button>
             <form method="POST" action="toggle_mode.php" class="mode-toggle-form">
                 ' . csrfField() . '
                 <input type="hidden" name="redirect" value="' . e($redirect) . '">
@@ -110,6 +122,13 @@ function layoutCustomizeModal(array $user, string $redirect): void
     $prec = precision();
     $wz   = worthlessZeros();
     $src = priceSource();
+
+    $curSel = currencyActiveCode();
+    $curOptions = '';
+    foreach (currencyRegistry() as $code => $meta) {
+        $curOptions .= '<option value="' . e($code) . '"' . ($code === $curSel ? ' selected' : '') . '>'
+            . e($meta['label']) . '</option>';
+    }
 
     echo '<div class="modal-overlay" id="customizeOverlay">
     <div class="modal animate-scale-in">
@@ -178,6 +197,12 @@ function layoutCustomizeModal(array $user, string $redirect): void
                     <small class="setting-note">Current source: ' . e(priceSourceLabel($src)) . '</small>
                     <button type="submit" class="btn btn-primary btn-sm">Apply</button>
                 </form>
+            </div>
+
+            <div class="setting-group">
+                <span class="setting-label">Display Currency</span>
+                <select id="displayCurrencySelect" class="settings-select">' . $curOptions . '</select>
+                <small class="setting-note">Convert all displayed values. Choosing a non-USD currency also becomes the navbar USD⇄currency switch. Free-market rates (Toman-based).</small>
             </div>
 
             <div class="setting-divider"></div>

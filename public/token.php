@@ -95,6 +95,7 @@ layoutNav($user);
           data-current-price="<?= $price ?>"
           data-precision="<?= precision() ?>"
           data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
+          <?= currencyDataAttrs() ?>
           data-pl-timeline="<?= e(json_encode($plTimeline)) ?>"
           data-transactions="<?= e(json_encode($allTxAsc)) ?>"
           data-deferred-prices="1">
@@ -120,7 +121,7 @@ layoutNav($user);
             <div class="pl-card">
                 <h3>Realized P/L</h3>
                 <p class="pl-value <?= plClass($realizedPL) ?>" data-countup="<?= $realizedPL ?>" data-pl="1">
-                    <?= formatPL($realizedPL) ?>
+                    <?= formatMoneyPL($realizedPL) ?>
                 </p>
                 <small>From completed sells vs buy cost</small>
             </div>
@@ -145,8 +146,8 @@ layoutNav($user);
         <section class="holdings-info">
             <div class="info-grid">
                 <div><span class="label">Holdings</span><span class="val"><?= formatCrypto($holdings) ?> <?= e($token['symbol']) ?></span></div>
-                <div><span class="label">Avg Buy Price</span><span class="val"><?= formatUSD($avgBuy) ?></span></div>
-                <div><span class="label">Cost Basis</span><span class="val"><?= formatUSD($costBasis) ?></span></div>
+                <div><span class="label">Avg Buy Price</span><span class="val"><?= formatMoney($avgBuy) ?></span></div>
+                <div><span class="label">Cost Basis</span><span class="val"><?= formatMoney($costBasis) ?></span></div>
                 <div><span class="label">Current Value</span><span class="val" data-live="currentVal"><span class="loading-skeleton loading-inline">&mdash;</span></span></div>
             </div>
         </section>
@@ -319,20 +320,20 @@ layoutNav($user);
                                     <?= $isBuy ? '+' : '-' ?><?= formatCrypto($row['amount']) ?>
                                 </span>
                             </td>
-                            <td><?= formatUSD($row['ppu']) ?></td>
-                            <td><?= formatUSD($row['total']) ?></td>
+                            <td><?= formatMoney($row['ppu']) ?></td>
+                            <td><?= formatMoney($row['total']) ?></td>
                             <td><?= formatCrypto($row['holdings']) ?></td>
-                            <td><?= formatUSD($row['avg_cost']) ?></td>
+                            <td><?= formatMoney($row['avg_cost']) ?></td>
                             <td class="<?= plClass($row['realized']) ?>">
                                 <?php if ($row['type'] === 'sell'): ?>
-                                    <?= formatPL($row['realized']) ?>
+                                    <?= formatMoneyPL($row['realized']) ?>
                                 <?php else: ?>
                                     –
                                 <?php endif; ?>
                             </td>
-                            <td class="<?= plClass($row['cum_realized']) ?>"><?= formatPL($row['cum_realized']) ?></td>
-                            <td class="<?= plClass($row['unrealized']) ?>"><?= formatPL($row['unrealized']) ?></td>
-                            <td class="<?= plClass($row['total_pl']) ?>"><?= formatPL($row['total_pl']) ?></td>
+                            <td class="<?= plClass($row['cum_realized']) ?>"><?= formatMoneyPL($row['cum_realized']) ?></td>
+                            <td class="<?= plClass($row['unrealized']) ?>"><?= formatMoneyPL($row['unrealized']) ?></td>
+                            <td class="<?= plClass($row['total_pl']) ?>"><?= formatMoneyPL($row['total_pl']) ?></td>
                         </tr>
                         <?php endforeach; ?>
                         <tr class="now-row" data-live-now="1"
@@ -342,9 +343,9 @@ layoutNav($user);
                             <td data-live-now="price"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td data-live-now="holdingVal"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td><?= formatCrypto($holdings) ?></td>
-                            <td><?= formatUSD($avgBuy) ?></td>
+                            <td><?= formatMoney($avgBuy) ?></td>
                             <td>–</td>
-                            <td class="<?= plClass($lastCumRealized) ?>"><?= formatPL($lastCumRealized) ?></td>
+                            <td class="<?= plClass($lastCumRealized) ?>"><?= formatMoneyPL($lastCumRealized) ?></td>
                             <td data-live-now="unrealized"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                             <td data-live-now="totalPL"><span class="loading-skeleton loading-inline">&mdash;</span></td>
                         </tr>
@@ -400,11 +401,11 @@ layoutNav($user);
                                 <?php endif; ?>
                             </td>
                             <td><?= formatCrypto($tx['amount']) ?></td>
-                            <td><?= formatUSD($tx['price_per_unit']) ?></td>
-                            <td><?= formatUSD($tx['total_value']) ?></td>
+                            <td><?= formatMoney($tx['price_per_unit']) ?></td>
+                            <td><?= formatMoney($tx['total_value']) ?></td>
                             <td class="<?= plClass($txPL) ?>">
                                 <?php if ($tx['type'] === 'sell'): ?>
-                                    <?= formatPL($txPL) ?>
+                                    <?= formatMoneyPL($txPL) ?>
                                 <?php else: ?>
                                     –
                                 <?php endif; ?>
