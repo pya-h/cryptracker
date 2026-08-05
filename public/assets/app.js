@@ -874,6 +874,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         realizedPL  += txRealized;
                         runRealized += txRealized;
                         runHoldings -= tx.amount;
+                        // Draw sold units out of the pool at the current average
+                        // (moving average) so rebought lots stay accurate.
+                        runBuyCost  -= tx.amount * runAvg;
+                        runBuyAmt   -= tx.amount;
+                        if (runBuyAmt < 1e-10) { runBuyAmt = 0; runBuyCost = 0; }
                     }
 
                     const runAvg       = runBuyAmt > 0 ? runBuyCost / runBuyAmt : 0;
@@ -891,7 +896,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const holdings = Math.max(0, totalBought - totalSold);
-                const avgBuy   = totalBought > 0 ? totalSpent / totalBought : 0;
+                // Moving average of remaining lots (pool reduced on each sell).
+                const avgBuy   = runBuyAmt > 1e-10 ? runBuyCost / runBuyAmt : 0;
                 const costBasis= holdings * avgBuy;
                 const currValue= holdings * currentPrice;
                 const unrealPL = currValue - costBasis;

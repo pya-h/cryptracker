@@ -28,6 +28,19 @@ function test_swap_realized_pl_helper_avg(): void
     assert_equals(round($expected, 6), round(realizedPLForSell($txs, 3.0, 2800.0, 'avg'), 6), 'avg realized helper');
 }
 
+function test_swap_realized_pl_helper_avg_moving_after_sell(): void
+{
+    // Moving average: buy 10@1, sell 10@2, buy 10@10 leaves the pool at $10 avg.
+    // A prospective sell of 5@20 must realize 5×(20-10)=50, NOT the lifetime
+    // blend 5×(20-5.5)=72.5 that ignoring the sell would give.
+    $txs = [
+        ['type' => 'buy',  'amount' => 10.0, 'price_per_unit' => 1.0,  'total_value' => 10.0],
+        ['type' => 'sell', 'amount' => 10.0, 'price_per_unit' => 2.0,  'total_value' => 20.0],
+        ['type' => 'buy',  'amount' => 10.0, 'price_per_unit' => 10.0, 'total_value' => 100.0],
+    ];
+    assert_equals(50.0, round(realizedPLForSell($txs, 5.0, 20.0, 'avg'), 6), 'avg moving realized helper');
+}
+
 function test_swap_realized_pl_helper_fifo(): void
 {
     // buy 1@85, buy 0.5@86, sell 1@84 → FIFO consumes first lot: 84 - 85 = -1.

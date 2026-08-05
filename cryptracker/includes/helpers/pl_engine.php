@@ -51,16 +51,24 @@ function realizedPLForSell(array $txsAsc, float $amount, float $ppu, string $mod
         return ($amount * $ppu) - $sellCost;
     }
 
-    // Weighted-average: proceeds vs all-time average buy cost.
-    $bought = 0.0;
-    $spent  = 0.0;
+    // Weighted-average (moving): proceeds vs the running average cost of the
+    // lots still held. The pool is reduced as earlier sells consume it, so a
+    // buy that follows a sell blends against the *remaining* cost, not the
+    // lifetime total — otherwise sold-and-rebought units corrupt the average.
+    $poolAmt  = 0.0;
+    $poolCost = 0.0;
     foreach ($txsAsc as $t) {
         if ($t['type'] === 'buy') {
-            $bought += (float) $t['amount'];
-            $spent  += (float) $t['total_value'];
+            $poolAmt  += (float) $t['amount'];
+            $poolCost += (float) $t['total_value'];
+        } else {
+            $avg = ($poolAmt > 1e-10) ? ($poolCost / $poolAmt) : 0.0;
+            $poolCost -= (float) $t['amount'] * $avg;
+            $poolAmt  -= (float) $t['amount'];
+            if ($poolAmt < 1e-10) { $poolAmt = 0.0; $poolCost = 0.0; }
         }
     }
-    $avgBuy = ($bought > 0) ? ($spent / $bought) : 0;
+    $avgBuy = ($poolAmt > 1e-10) ? ($poolCost / $poolAmt) : 0.0;
     return $amount * ($ppu - $avgBuy);
 }
 
@@ -92,6 +100,11 @@ function _calcAvg(array $txs, float $currentPrice): array
             $realizedPL  += $txRealized;
             $runRealized += $txRealized;
             $runHoldings -= $tx['amount'];
+            // Draw the sold units out of the cost pool at the current average
+            // so the remaining lots keep their true (moving) average cost.
+            $runBuyCost  -= $tx['amount'] * $runAvg;
+            $runBuyAmt   -= $tx['amount'];
+            if ($runBuyAmt < 1e-10) { $runBuyAmt = 0.0; $runBuyCost = 0.0; }
         }
 
         $runAvg        = ($runBuyAmt > 0) ? ($runBuyCost / $runBuyAmt) : 0;
@@ -116,7 +129,8 @@ function _calcAvg(array $txs, float $currentPrice): array
     }
 
     $holdings  = max(0, $totalBought - $totalSold);
-    $avgBuy    = ($totalBought > 0) ? ($totalSpent / $totalBought) : 0;
+    // Moving average of the lots still held (pool reduced on every sell above).
+    $avgBuy    = ($runBuyAmt > 1e-10) ? ($runBuyCost / $runBuyAmt) : 0;
     $costBasis = $holdings * $avgBuy;
     $currValue = $holdings * $currentPrice;
     $unrealPL  = $currValue - $costBasis;

@@ -158,6 +158,62 @@ function test_pl_break_even(): void
     dbPurgeAll();
 }
 
+/**
+ * Weighted-average must use a MOVING average: selling draws units out of the
+ * cost pool, so a buy after a sell blends against the remaining cost only.
+ *
+ * Buy 10@$1, sell 10@$2 (realized +10), then buy 10@$10. The first lot is fully
+ * gone, so the held 10 units cost $10 each — avg buy $10, not the lifetime
+ * blend (110/20 = $5.5). At price $10: unrealized 0, total P/L = realized 10.
+ */
+function test_pl_avg_moving_average_resets_after_sell(): void
+{
+    dbPurgeAll();
+    $uid = dbInsertUser('avgmove', 'avgmove@test.com', password_hash('p', PASSWORD_BCRYPT));
+    $tid = dbInsertUserToken($uid, 1, 'BTC', 'Bitcoin', 'bitcoin');
+
+    dbInsertTransaction($tid, 'buy',  10.0, 1.0,  10.0,  0.0);
+    dbInsertTransaction($tid, 'sell', 10.0, 2.0,  20.0, 10.0);
+    dbInsertTransaction($tid, 'buy',  10.0, 10.0, 100.0, 0.0);
+
+    $pl = calcTokenPL($tid, 10.0, 'avg');
+    assert_equals(10.0,  round($pl['holdings'], 6),      'AVG: 10 held after sell+rebuy');
+    assert_equals(10.0,  round($pl['avg_buy'], 6),       'AVG: moving avg buy = 10 (not lifetime 5.5)');
+    assert_equals(100.0, round($pl['cost_basis'], 6),    'AVG: cost basis = 100 (actual paid)');
+    assert_equals(10.0,  round($pl['realized_pl'], 6),   'AVG: realized from the sell = +10');
+    assert_equals(0.0,   round($pl['unrealized_pl'], 6), 'AVG: unrealized at $10 = 0');
+    assert_equals(10.0,  round($pl['total_pl'], 6),      'AVG: total P/L = 10, not overstated');
+
+    dbPurgeAll();
+}
+
+/**
+ * Interleaved buy-after-sell with a leftover partial lot.
+ * Buy 4@$10, sell 2@$20 (avg $10 → realized +20), buy 2@$30.
+ * Remaining pool: 2 units left from lot#1 at $10 + 2 units at $30 = $80 / 4 = $20 avg.
+ * At price $25: unrealized = 4×25 - 80 = 20, total = 20 + 20 = 40.
+ */
+function test_pl_avg_interleaved_partial_lot(): void
+{
+    dbPurgeAll();
+    $uid = dbInsertUser('avgint', 'avgint@test.com', password_hash('p', PASSWORD_BCRYPT));
+    $tid = dbInsertUserToken($uid, 1, 'ETH', 'Ethereum', 'ethereum');
+
+    dbInsertTransaction($tid, 'buy',  4.0, 10.0, 40.0,  0.0);
+    dbInsertTransaction($tid, 'sell', 2.0, 20.0, 40.0, 20.0);
+    dbInsertTransaction($tid, 'buy',  2.0, 30.0, 60.0,  0.0);
+
+    $pl = calcTokenPL($tid, 25.0, 'avg');
+    assert_equals(4.0,  round($pl['holdings'], 6),      'AVG: 4 held');
+    assert_equals(20.0, round($pl['avg_buy'], 6),       'AVG: moving avg = 20');
+    assert_equals(80.0, round($pl['cost_basis'], 6),    'AVG: cost basis = 80');
+    assert_equals(20.0, round($pl['realized_pl'], 6),   'AVG: realized = +20');
+    assert_equals(20.0, round($pl['unrealized_pl'], 6), 'AVG: unrealized at $25 = 20');
+    assert_equals(40.0, round($pl['total_pl'], 6),      'AVG: total = 40');
+
+    dbPurgeAll();
+}
+
 /* ── FIFO (Exact) Mode Tests ─────────────────────────────── */
 
 /**

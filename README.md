@@ -7,8 +7,8 @@
 Track tokens, record trades, compute profit & loss, and view live prices — all without frameworks, npm, or external dependencies.
 
 [![PHP 8.0+](https://img.shields.io/badge/PHP-8.0%2B-777BB4?logo=php&logoColor=white)](https://php.net)
-[![Tests](https://img.shields.io/badge/tests-121%20passed-brightgreen)](cryptracker/tests/run.php)
-[![Assertions](https://img.shields.io/badge/assertions-371-blue)](cryptracker/tests/run.php)
+[![Tests](https://img.shields.io/badge/tests-124%20passed-brightgreen)](cryptracker/tests/run.php)
+[![Assertions](https://img.shields.io/badge/assertions-384-blue)](cryptracker/tests/run.php)
 [![License](https://img.shields.io/badge/license-MIT-green)](#license)
 
 </div>
@@ -177,7 +177,7 @@ cryptracker/                        # ← project root (repo)
     ├── tools/
     │   └── generate_pwa_icons.php  # Pure-PHP PWA icon generator (no image libs)
     │
-    ├── tests/                      # 121 tests / 371 assertions
+    ├── tests/                      # 124 tests / 384 assertions
     │   ├── run.php                 # Test runner (autodiscovers Test*.php)
     │   ├── TestAuth.php            # Authentication tests
     │   ├── TestDb.php              # Database layer tests
@@ -206,7 +206,7 @@ Tests use an isolated temporary data directory and clean up after themselves.
 
 ```
 ══════════════════════════════════════════════
-  Passed: 371
+  Passed: 384
   Failed: 0
 ══════════════════════════════════════════════
 ```
@@ -215,8 +215,8 @@ Tests use an isolated temporary data directory and clean up after themselves.
 |---|---|---|
 | **Database** | 8 | CRUD, cascade delete, field whitelisting, multi-user isolation |
 | **Authentication** | 7 | Registration, validation, duplicate prevention, login, rate limiting |
-| **P/L Calculations** | 15 | FIFO, weighted-avg, partial sell, cross-lot, break-even, timeline |
-| **Token Swaps** | 9 | Value conservation, FIFO/avg realized P/L, notes, holdings & ownership guards |
+| **P/L Calculations** | 17 | FIFO, weighted-avg (moving), sell-then-rebuy, partial sell, cross-lot, break-even, timeline |
+| **Token Swaps** | 10 | Value conservation, FIFO/avg (moving) realized P/L, notes, holdings & ownership guards |
 | **Undo** | 9 | Buy/sell/swap revert, single-use, latest-only & ownership guards, P/L restoration |
 | **Currency** | 15 | Factor math (USD/IRT/EUR cross-rate), formatting, cookie resolution, missing-rate fallback |
 | **Security** | 12 | CSRF tokens, XSS escaping, password hashing, flash messages |
