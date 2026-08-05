@@ -1076,6 +1076,20 @@ form .btn { margin-top: 1.2rem; }
     color: var(--text-muted); font-style: italic;
 }
 
+/* Undo control on the last (undoable) transaction row */
+.tx-undoable { background: rgba(124, 106, 239, .07); }
+.tx-undoable td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+.undo-form { display: inline; margin: 0; }
+.undo-btn {
+    display: inline-flex; align-items: center; gap: .25rem;
+    margin-top: .3rem; padding: .18rem .5rem;
+    font-size: .72rem; font-weight: 600; line-height: 1;
+    color: var(--primary); background: transparent;
+    border: 1px solid var(--primary); border-radius: 999px;
+    cursor: pointer; transition: background .15s, color .15s;
+}
+.undo-btn:hover { background: var(--primary); color: #fff; }
+
 /* ── Swap Modal ───────────────────────────────────────────── */
 
 .modal-swap { max-width: 520px; }

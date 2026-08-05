@@ -40,7 +40,9 @@ if ($type === 'sell') {
     $mode = plMode();
     $realizedPL = realizedPLForSell(dbGetTransactions($userTokenId), $amount, $ppu, $mode);
 }
-dbInsertTransaction($userTokenId, $type, $amount, $ppu, $totalValue, $realizedPL);
+$txId = dbInsertTransaction($userTokenId, $type, $amount, $ppu, $totalValue, $realizedPL);
+undoRecordAction($user['id'], $type, [$txId],
+    ucfirst($type) . ' of ' . formatCrypto($amount) . ' ' . $token['symbol']);
 
 $label = ucfirst($type);
 $plMsg = ($type === 'sell') ? ' | Realized P/L: ' . formatPL($realizedPL) : '';

@@ -33,6 +33,12 @@ if (!$result['ok']) {
 
 $a = $result['token_a'];
 $b = $result['token_b'];
+
+undoRecordAction($user['id'], 'swap',
+    [(int) $result['sell_id'], (int) $result['buy_id']],
+    'Swap ' . formatCrypto($result['amount_a']) . ' ' . $a['symbol'] .
+    ' → ' . formatCrypto($result['amount_b']) . ' ' . $b['symbol']);
+
 flash('success',
     'Swapped ' . formatCrypto($result['amount_a']) . ' ' . $a['symbol'] .
     ' → ' . formatCrypto($result['amount_b']) . ' ' . $b['symbol'] .

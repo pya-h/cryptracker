@@ -20,6 +20,13 @@ $marketCap = 0; $volume24 = 0; $csupply = 0; $tsupply = 0; $msupply = 0; $rank =
 $allTxAsc = dbGetTransactions($tokenId);
 $allTx    = array_reverse($allTxAsc);
 
+/* Which transaction row (if any) shown on this page is the user's last,
+   undoable action. A swap has one leg per token, so at most one row matches. */
+$undoable  = getUndoableAction($user['id']);
+$undoIds   = $undoable ? array_flip($undoable['tx_ids']) : [];
+$undoKind  = $undoable['kind'] ?? '';
+$undoPlural = ($undoable && count($undoable['tx_ids']) > 1);
+
 $mode = plMode();
 $pl   = ($mode === 'fifo') ? _calcFifo($allTxAsc, 0) : _calcAvg($allTxAsc, 0);
 
@@ -376,12 +383,21 @@ layoutNav($user);
                         <?php
                             $txKey = $tx['created_at'] . '|' . $tx['type'] . '|' . $tx['amount'];
                             $txPL  = $txPLMap[$txKey] ?? $tx['realized_pl'];
+                            $isUndoable = isset($undoIds[(int) $tx['id']]);
                         ?>
-                        <tr>
+                        <tr<?= $isUndoable ? ' class="tx-undoable"' : '' ?>>
                             <td><?= date('M d, Y H:i', strtotime($tx['created_at'])) ?></td>
                             <td>
                                 <span class="badge badge-<?= $tx['type'] ?>"><?= ucfirst($tx['type']) ?></span>
                                 <?php if (!empty($tx['note'])): ?><small class="tx-note"><?= e($tx['note']) ?></small><?php endif; ?>
+                                <?php if ($isUndoable): ?>
+                                <form method="POST" action="undo.php" class="undo-form"
+                                      onsubmit="return confirm('Undo this <?= e($undoKind) ?>? This permanently removes the record<?= $undoPlural ? 's for both tokens' : '' ?>.');">
+                                    <?= csrfField() ?>
+                                    <input type="hidden" name="return_id" value="<?= (int) $tokenId ?>">
+                                    <button type="submit" class="undo-btn" title="Undo this <?= e($undoKind) ?>" aria-label="Undo this <?= e($undoKind) ?>">&#8634; Undo</button>
+                                </form>
+                                <?php endif; ?>
                             </td>
                             <td><?= formatCrypto($tx['amount']) ?></td>
                             <td><?= formatUSD($tx['price_per_unit']) ?></td>

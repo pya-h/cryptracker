@@ -7,8 +7,8 @@
 Track tokens, record trades, compute profit & loss, and view live prices — all without frameworks, npm, or external dependencies.
 
 [![PHP 8.0+](https://img.shields.io/badge/PHP-8.0%2B-777BB4?logo=php&logoColor=white)](https://php.net)
-[![Tests](https://img.shields.io/badge/tests-97%20passed-brightgreen)](cryptracker/tests/run.php)
-[![Assertions](https://img.shields.io/badge/assertions-305-blue)](cryptracker/tests/run.php)
+[![Tests](https://img.shields.io/badge/tests-106%20passed-brightgreen)](cryptracker/tests/run.php)
+[![Assertions](https://img.shields.io/badge/assertions-343-blue)](cryptracker/tests/run.php)
 [![License](https://img.shields.io/badge/license-MIT-green)](#license)
 
 </div>
@@ -32,6 +32,7 @@ Most crypto trackers are either bloated SaaS platforms that harvest your data, o
 - **Multi-token tracking** — Search and add any of 5,000+ cryptocurrencies
 - **Buy/sell recording** — Record trades with exact price per unit and date
 - **Direct swaps** — Convert one tracked token straight into another in a single step (records a sell of A + a buy of B), with two-way amount inputs, live-price or custom rate/ratio, and strict value conservation
+- **Undo last action** — Instantly revert the most recent buy, sell, or swap (a swap removes both legs) from the transaction history; single-step by design, so an undo can never corrupt earlier records' stored P/L
 - **P/L engine** — Choose between **FIFO** or **weighted-average** cost basis methods
 - **Realized & unrealized P/L** — Per-token and portfolio-wide calculations
 - **Analytics timeline** — Historical P/L progression with interactive canvas graph
@@ -119,6 +120,7 @@ cryptracker/                        # ← project root (repo)
 │   ├── token.php                   # Single-token analytics, graph, trades
 │   ├── transaction.php             # Buy/sell POST handler
 │   ├── swap.php                    # Token-to-token conversion POST handler
+│   ├── undo.php                    # Undo-last-action POST handler
 │   ├── add_token.php               # Add token POST handler
 │   ├── remove_token.php            # Remove token POST handler
 │   ├── search_tokens.php           # AJAX coin search endpoint
@@ -158,6 +160,7 @@ cryptracker/                        # ← project root (repo)
     │   │       ├── preferences.php # Theme, precision, P/L mode, source
     │   │       ├── pl_engine.php   # FIFO & weighted-average P/L calc
     │   │       ├── swap.php        # Value-conserving token-to-token conversion
+    │   │       ├── undo.php        # Single-step undo of the last buy/sell/swap
     │   │       ├── flash.php       # Flash message system
     │   │       └── layout.php      # HTML head, nav, footer rendering
     │   ├── api.php                 # Wrapper — loads 6 sub-modules ↓
@@ -172,12 +175,13 @@ cryptracker/                        # ← project root (repo)
     ├── tools/
     │   └── generate_pwa_icons.php  # Pure-PHP PWA icon generator (no image libs)
     │
-    ├── tests/                      # 97 tests / 305 assertions
+    ├── tests/                      # 106 tests / 343 assertions
     │   ├── run.php                 # Test runner (autodiscovers Test*.php)
     │   ├── TestAuth.php            # Authentication tests
     │   ├── TestDb.php              # Database layer tests
     │   ├── TestPL.php              # P/L calculation tests (FIFO + AVG)
     │   ├── TestSwap.php            # Token swap / conversion tests
+    │   ├── TestUndo.php            # Undo-last-action tests
     │   ├── TestSecurity.php        # CSRF, XSS, formatting, flash tests
     │   ├── TestPreferences.php     # User preference helpers tests
     │   ├── TestFormatting.php      # Number formatting tests
@@ -199,7 +203,7 @@ Tests use an isolated temporary data directory and clean up after themselves.
 
 ```
 ══════════════════════════════════════════════
-  Passed: 305
+  Passed: 343
   Failed: 0
 ══════════════════════════════════════════════
 ```
@@ -210,6 +214,7 @@ Tests use an isolated temporary data directory and clean up after themselves.
 | **Authentication** | 7 | Registration, validation, duplicate prevention, login, rate limiting |
 | **P/L Calculations** | 15 | FIFO, weighted-avg, partial sell, cross-lot, break-even, timeline |
 | **Token Swaps** | 9 | Value conservation, FIFO/avg realized P/L, notes, holdings & ownership guards |
+| **Undo** | 9 | Buy/sell/swap revert, single-use, latest-only & ownership guards, P/L restoration |
 | **Security** | 12 | CSRF tokens, XSS escaping, password hashing, flash messages |
 | **Preferences** | 14 | Theme, precision, P/L mode, source selection, defaults, fallbacks |
 | **Formatting** | 11 | Big numbers, supply, form values, worthless zeros |

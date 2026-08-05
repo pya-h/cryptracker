@@ -42,6 +42,16 @@ function dbEnsureSchema(PDO $pdo): void
     $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)');
     $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)');
 
+    $userColStmt = $pdo->query("PRAGMA table_info(users)");
+    $userColumns = $userColStmt ? $userColStmt->fetchAll() : [];
+    $userExisting = [];
+    foreach ($userColumns as $col) {
+        $userExisting[(string) ($col['name'] ?? '')] = true;
+    }
+    if (!isset($userExisting['undo_action'])) {
+        $pdo->exec('ALTER TABLE users ADD COLUMN undo_action TEXT NULL');
+    }
+
     $pdo->exec('CREATE TABLE IF NOT EXISTS user_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -273,6 +283,38 @@ function dbInsertTransaction(int $userTokenId, string $type, float $amount, floa
     return (int) dbPdo()->lastInsertId();
 }
 
+function dbGetTransactionById(int $txId): ?array
+{
+    $stmt = dbPdo()->prepare('SELECT * FROM transactions WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $txId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+/** Delete transactions by id. Returns the number of rows removed (single atomic statement). */
+function dbDeleteTransactions(array $txIds): int
+{
+    $ids = array_values(array_unique(array_map('intval', $txIds)));
+    if (empty($ids)) return 0;
+
+    $ph   = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = dbPdo()->prepare('DELETE FROM transactions WHERE id IN (' . $ph . ')');
+    $stmt->execute($ids);
+    return $stmt->rowCount();
+}
+
+/** Highest transaction id belonging to any of the user's tokens, or null. */
+function dbGetMaxTransactionIdForUser(int $userId): ?int
+{
+    $stmt = dbPdo()->prepare('SELECT MAX(t.id) AS m FROM transactions t
+        JOIN user_tokens ut ON t.user_token_id = ut.id
+        WHERE ut.user_id = :u');
+    $stmt->execute([':u' => $userId]);
+    $row = $stmt->fetch();
+    if (!$row || $row['m'] === null) return null;
+    return (int) $row['m'];
+}
+
 function dbGetTokenStats(int $userTokenId): array
 {
     $stmt = dbPdo()->prepare('SELECT
@@ -313,6 +355,29 @@ function dbUpdateUser(int $id, array $fields): bool
     $stmt = dbPdo()->prepare($sql);
     $stmt->execute($params);
     return $stmt->rowCount() > 0;
+}
+
+/**
+ * Undo state is stored on the user row as a JSON string (or NULL). It is kept
+ * out of dbUpdateUser's field whitelist — only these dedicated accessors touch it.
+ */
+function dbGetUserUndo(int $userId): ?array
+{
+    $stmt = dbPdo()->prepare('SELECT undo_action FROM users WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $userId]);
+    $row = $stmt->fetch();
+    if (!$row || $row['undo_action'] === null || $row['undo_action'] === '') return null;
+
+    $decoded = json_decode((string) $row['undo_action'], true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function dbSetUserUndo(int $userId, ?array $undo): bool
+{
+    $json = $undo === null ? null : json_encode($undo);
+    $stmt = dbPdo()->prepare('UPDATE users SET undo_action = :j WHERE id = :id');
+    $stmt->execute([':j' => $json, ':id' => $userId]);
+    return true;
 }
 
 function dbPurgeAll(): void

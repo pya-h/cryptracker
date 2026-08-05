@@ -229,6 +229,47 @@ function dbInsertTransaction(int $userTokenId, string $type, float $amount, floa
     return $id;
 }
 
+function dbGetTransactionById(int $txId): ?array
+{
+    foreach (readTable('transactions') as $t) {
+        if ((int) $t['id'] === $txId) return $t;
+    }
+    return null;
+}
+
+/**
+ * Delete transactions by id. Returns the number of rows actually removed.
+ * A single atomic write (temp file + rename) removes all given ids at once.
+ */
+function dbDeleteTransactions(array $txIds): int
+{
+    $ids = array_flip(array_map('intval', $txIds));
+    if (empty($ids)) return 0;
+
+    $txs    = readTable('transactions');
+    $before = count($txs);
+    $txs    = array_values(array_filter($txs, fn($t) => !isset($ids[(int) $t['id']])));
+    $removed = $before - count($txs);
+
+    if ($removed > 0) writeTable('transactions', $txs);
+    return $removed;
+}
+
+/** Highest transaction id belonging to any of the user's tokens, or null. */
+function dbGetMaxTransactionIdForUser(int $userId): ?int
+{
+    $tokenIds = array_flip(array_map('intval', array_column(dbGetUserTokens($userId), 'id')));
+    if (empty($tokenIds)) return null;
+
+    $max = null;
+    foreach (readTable('transactions') as $t) {
+        if (!isset($tokenIds[(int) $t['user_token_id']])) continue;
+        $id = (int) $t['id'];
+        if ($max === null || $id > $max) $max = $id;
+    }
+    return $max;
+}
+
 function dbGetTokenStats(int $userTokenId): array
 {
     $txs    = dbGetTransactions($userTokenId);
@@ -268,6 +309,37 @@ function dbUpdateUser(int $id, array $fields): bool
         }
     }
     return false;
+}
+
+/**
+ * Undo state is stored on the user row as a small structured record
+ * (or null when there is nothing to undo). It is intentionally NOT part of
+ * dbUpdateUser's field whitelist — only these dedicated accessors touch it.
+ */
+function dbGetUserUndo(int $userId): ?array
+{
+    foreach (readTable('users') as $u) {
+        if ((int) $u['id'] === $userId) {
+            $ua = $u['undo_action'] ?? null;
+            return is_array($ua) ? $ua : null;
+        }
+    }
+    return null;
+}
+
+function dbSetUserUndo(int $userId, ?array $undo): bool
+{
+    $users   = readTable('users');
+    $updated = false;
+    foreach ($users as &$u) {
+        if ((int) $u['id'] === $userId) {
+            $u['undo_action'] = $undo; // null clears it
+            $updated = true;
+            break;
+        }
+    }
+    if ($updated) writeTable('users', $users);
+    return $updated;
 }
 
 function dbPurgeAll(): void
