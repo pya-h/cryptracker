@@ -12,5 +12,6 @@ require_once __DIR__ . '/helpers/security.php';
 require_once __DIR__ . '/helpers/preferences.php';
 require_once __DIR__ . '/helpers/formatting.php';
 require_once __DIR__ . '/helpers/pl_engine.php';
+require_once __DIR__ . '/helpers/swap.php';
 require_once __DIR__ . '/helpers/flash.php';
 require_once __DIR__ . '/helpers/layout.php';

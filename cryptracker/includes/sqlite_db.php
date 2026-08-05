@@ -84,6 +84,16 @@ function dbEnsureSchema(PDO $pdo): void
 
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_transactions_token ON transactions(user_token_id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_transactions_token_date ON transactions(user_token_id, created_at)');
+
+    $txColStmt = $pdo->query("PRAGMA table_info(transactions)");
+    $txColumns = $txColStmt ? $txColStmt->fetchAll() : [];
+    $txExisting = [];
+    foreach ($txColumns as $col) {
+        $txExisting[(string) ($col['name'] ?? '')] = true;
+    }
+    if (!isset($txExisting['note'])) {
+        $pdo->exec('ALTER TABLE transactions ADD COLUMN note TEXT NULL');
+    }
 }
 
 function dbGetUserById(int $id): ?array
@@ -240,13 +250,15 @@ function dbGetTransactionsDesc(int $userTokenId): array
     return $stmt->fetchAll();
 }
 
-function dbInsertTransaction(int $userTokenId, string $type, float $amount, float $ppu, float $totalValue, float $realizedPL): int
+function dbInsertTransaction(int $userTokenId, string $type, float $amount, float $ppu, float $totalValue, float $realizedPL, ?string $note = null): int
 {
     if (!in_array($type, ['buy', 'sell'], true)) {
         throw new InvalidArgumentException("Transaction type must be 'buy' or 'sell'");
     }
 
-    $stmt = dbPdo()->prepare('INSERT INTO transactions (user_token_id, type, amount, price_per_unit, total_value, realized_pl, created_at) VALUES (:ut, :ty, :am, :ppu, :tv, :rp, :ca)');
+    $note = ($note !== null && trim($note) !== '') ? trim($note) : null;
+
+    $stmt = dbPdo()->prepare('INSERT INTO transactions (user_token_id, type, amount, price_per_unit, total_value, realized_pl, note, created_at) VALUES (:ut, :ty, :am, :ppu, :tv, :rp, :note, :ca)');
     $stmt->execute([
         ':ut' => $userTokenId,
         ':ty' => $type,
@@ -254,6 +266,7 @@ function dbInsertTransaction(int $userTokenId, string $type, float $amount, floa
         ':ppu' => $ppu,
         ':tv' => $totalValue,
         ':rp' => $realizedPL,
+        ':note' => $note,
         ':ca' => date('Y-m-d H:i:s'),
     ]);
 

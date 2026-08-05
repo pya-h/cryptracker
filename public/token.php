@@ -56,6 +56,20 @@ $graphPoints[] = [
 
 $graphData = json_encode($graphPoints);
 
+/* Other tracked tokens available as swap targets (for the Convert modal). */
+$swapTargets = [];
+foreach (dbGetUserTokens($user['id']) as $t) {
+    if ((int) $t['id'] === (int) $tokenId) continue;
+    $tpl = calcTokenPL((int) $t['id'], 0, $mode);
+    $swapTargets[] = [
+        'id'       => (int) $t['id'],
+        'cmc_id'   => (int) $t['cmc_id'],
+        'symbol'   => $t['symbol'],
+        'name'     => $t['name'],
+        'holdings' => $tpl['holdings'],
+    ];
+}
+
 layoutHead(e($token['symbol']));
 layoutNav($user);
 ?>
@@ -70,6 +84,7 @@ layoutNav($user);
           data-total-spent="<?= $totalSpent ?>"
           data-pl-mode="<?= e($mode) ?>"
           data-symbol="<?= e($token['symbol']) ?>"
+          data-name="<?= e($token['name']) ?>"
           data-current-price="<?= $price ?>"
           data-precision="<?= precision() ?>"
           data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
@@ -238,6 +253,28 @@ layoutNav($user);
             </div>
         </section>
 
+        <?php if (!empty($swapTargets)): ?>
+        <section class="swap-launch animate-fade-in-up">
+            <div class="swap-launch-inner">
+                <div class="swap-launch-text">
+                    <h3><span class="swap-launch-icon">&#8646;</span> Convert <?= e($token['symbol']) ?></h3>
+                    <p>Directly swap <?= e($token['symbol']) ?> into another token you track — records the sell and buy in one step.</p>
+                </div>
+                <div class="swap-launch-controls">
+                    <select id="swapTargetSelect" aria-label="Convert into">
+                        <?php foreach ($swapTargets as $st): ?>
+                        <option value="<?= (int) $st['id'] ?>"><?= e($st['symbol']) ?> &mdash; <?= e($st['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="button" class="btn btn-primary" id="openSwap" <?= $holdings <= 0 ? 'disabled' : '' ?>>Convert</button>
+                </div>
+            </div>
+            <?php if ($holdings <= 0): ?>
+            <p class="swap-launch-note">You have no <?= e($token['symbol']) ?> holdings to convert.</p>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
         <?php if (!empty($plTimeline)): ?>
         <section class="pl-analytics animate-fade-in-up">
             <h2>P/L Analytics</h2>
@@ -342,7 +379,10 @@ layoutNav($user);
                         ?>
                         <tr>
                             <td><?= date('M d, Y H:i', strtotime($tx['created_at'])) ?></td>
-                            <td><span class="badge badge-<?= $tx['type'] ?>"><?= ucfirst($tx['type']) ?></span></td>
+                            <td>
+                                <span class="badge badge-<?= $tx['type'] ?>"><?= ucfirst($tx['type']) ?></span>
+                                <?php if (!empty($tx['note'])): ?><small class="tx-note"><?= e($tx['note']) ?></small><?php endif; ?>
+                            </td>
                             <td><?= formatCrypto($tx['amount']) ?></td>
                             <td><?= formatUSD($tx['price_per_unit']) ?></td>
                             <td><?= formatUSD($tx['total_value']) ?></td>
@@ -369,6 +409,76 @@ layoutNav($user);
             </form>
         </section>
     </main>
+
+    <?php if (!empty($swapTargets)): ?>
+    <div class="modal-overlay" id="swapOverlay">
+        <div class="modal modal-swap animate-scale-in">
+            <div class="modal-header">
+                <h2>Convert <?= e($token['symbol']) ?> <span class="swap-head-arrow">&#8594;</span> <span class="js-symB">&mdash;</span></h2>
+                <button type="button" class="modal-close" id="closeSwap">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="swap-tokens">
+                    <div class="swap-token-panel">
+                        <span class="swap-token-role">From</span>
+                        <span class="swap-token-sym"><?= e($token['symbol']) ?></span>
+                        <div class="swap-token-meta">
+                            <div><span>Price</span><strong id="swapFromPrice">&mdash;</strong></div>
+                            <div><span>Holdings</span><strong id="swapFromHoldings">&mdash;</strong></div>
+                            <div><span>Value</span><strong id="swapFromValue">&mdash;</strong></div>
+                        </div>
+                    </div>
+                    <div class="swap-token-panel">
+                        <span class="swap-token-role">To</span>
+                        <span class="swap-token-sym js-symB">&mdash;</span>
+                        <div class="swap-token-meta">
+                            <div><span>Price</span><strong id="swapToPrice">&mdash;</strong></div>
+                            <div><span>Holdings</span><strong id="swapToHoldings">&mdash;</strong></div>
+                            <div><span>Value</span><strong id="swapToValue">&mdash;</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="POST" action="swap.php" id="swapForm">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="user_token_id" value="<?= (int) $token['id'] ?>">
+                    <input type="hidden" name="target_token_id" id="swapTargetId" value="">
+
+                    <label for="swapAmountA">You convert (<?= e($token['symbol']) ?>)</label>
+                    <div class="swap-input-row">
+                        <input type="number" step="any" min="0" name="amount_a" id="swapAmountA" placeholder="0.00" autocomplete="off" inputmode="decimal">
+                        <button type="button" class="swap-max" id="swapMax">Max</button>
+                    </div>
+
+                    <div class="swap-mid" aria-hidden="true">&#8645;</div>
+
+                    <label for="swapAmountB">You receive (<span class="js-symB">&mdash;</span>)</label>
+                    <input type="number" step="any" min="0" name="amount_b" id="swapAmountB" placeholder="0.00" autocomplete="off" inputmode="decimal">
+
+                    <p class="swap-rate" id="swapRate">&mdash;</p>
+
+                    <details class="swap-advanced" id="swapAdvanced">
+                        <summary>Advanced pricing</summary>
+                        <div class="swap-advanced-body">
+                            <label for="swapPriceA">Price of <?= e($token['symbol']) ?> (USD)</label>
+                            <input type="number" step="any" min="0" name="price_a" id="swapPriceA" placeholder="0.00" autocomplete="off" inputmode="decimal">
+                            <label for="swapPriceB">Price of <span class="js-symB">&mdash;</span> (USD)</label>
+                            <input type="number" step="any" min="0" name="price_b" id="swapPriceB" placeholder="0.00" autocomplete="off" inputmode="decimal">
+                            <label for="swapRatioInput">Ratio (1 <?= e($token['symbol']) ?> = ? <span class="js-symB">&mdash;</span>)</label>
+                            <input type="number" step="any" min="0" id="swapRatioInput" placeholder="0.00" autocomplete="off" inputmode="decimal">
+                            <p class="swap-hint">Defaults to live market prices. Adjust to record a custom rate &mdash; the value given up always equals the value received.</p>
+                        </div>
+                    </details>
+
+                    <p class="swap-error" id="swapError" style="display:none;"></p>
+
+                    <button type="submit" class="btn btn-primary swap-submit" id="swapSubmit">Swap</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script>window._swapTargets = <?= json_encode($swapTargets, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+    <?php endif; ?>
 
     <script>
     window._plGraphData = <?= $graphData ?>;

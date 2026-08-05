@@ -38,36 +38,7 @@ if ($type === 'sell') {
     }
 
     $mode = plMode();
-    if ($mode === 'fifo') {
-        $allTx = dbGetTransactions($userTokenId);
-        $lots  = [];
-        foreach ($allTx as $t) {
-            if ($t['type'] === 'buy') {
-                $lots[] = ['amount' => $t['amount'], 'price' => $t['price_per_unit']];
-            } else {
-                $rem = $t['amount'];
-                while ($rem > 1e-10 && !empty($lots)) {
-                    $take = min($rem, $lots[0]['amount']);
-                    $lots[0]['amount'] -= $take;
-                    $rem -= $take;
-                    if ($lots[0]['amount'] < 1e-10) array_shift($lots);
-                }
-            }
-        }
-        $sellCost = 0.0;
-        $rem = $amount;
-        while ($rem > 1e-10 && !empty($lots)) {
-            $take = min($rem, $lots[0]['amount']);
-            $sellCost += $take * $lots[0]['price'];
-            $lots[0]['amount'] -= $take;
-            $rem -= $take;
-            if ($lots[0]['amount'] < 1e-10) array_shift($lots);
-        }
-        $realizedPL = ($amount * $ppu) - $sellCost;
-    } else {
-        $avgBuy     = ($row['bought'] > 0) ? ($row['spent'] / $row['bought']) : 0;
-        $realizedPL = $amount * ($ppu - $avgBuy);
-    }
+    $realizedPL = realizedPLForSell(dbGetTransactions($userTokenId), $amount, $ppu, $mode);
 }
 dbInsertTransaction($userTokenId, $type, $amount, $ppu, $totalValue, $realizedPL);
 

@@ -16,6 +16,54 @@ function calcTokenPL(int $tokenId, float $currentPrice, string $mode = 'avg'): a
     return _calcAvg($txs, $currentPrice);
 }
 
+/**
+ * Realized P/L for a prospective sell of $amount at $ppu, given the token's
+ * existing transactions (ascending by date). Honors the active cost-basis mode
+ * ('fifo' = oldest lots first, otherwise weighted-average). This is the single
+ * source of truth shared by the buy/sell handler and the swap handler.
+ */
+function realizedPLForSell(array $txsAsc, float $amount, float $ppu, string $mode): float
+{
+    if ($mode === 'fifo') {
+        $lots = [];
+        foreach ($txsAsc as $t) {
+            if ($t['type'] === 'buy') {
+                $lots[] = ['amount' => (float) $t['amount'], 'price' => (float) $t['price_per_unit']];
+            } else {
+                $rem = (float) $t['amount'];
+                while ($rem > 1e-10 && !empty($lots)) {
+                    $take = min($rem, $lots[0]['amount']);
+                    $lots[0]['amount'] -= $take;
+                    $rem -= $take;
+                    if ($lots[0]['amount'] < 1e-10) array_shift($lots);
+                }
+            }
+        }
+        $sellCost = 0.0;
+        $rem = $amount;
+        while ($rem > 1e-10 && !empty($lots)) {
+            $take = min($rem, $lots[0]['amount']);
+            $sellCost += $take * $lots[0]['price'];
+            $lots[0]['amount'] -= $take;
+            $rem -= $take;
+            if ($lots[0]['amount'] < 1e-10) array_shift($lots);
+        }
+        return ($amount * $ppu) - $sellCost;
+    }
+
+    // Weighted-average: proceeds vs all-time average buy cost.
+    $bought = 0.0;
+    $spent  = 0.0;
+    foreach ($txsAsc as $t) {
+        if ($t['type'] === 'buy') {
+            $bought += (float) $t['amount'];
+            $spent  += (float) $t['total_value'];
+        }
+    }
+    $avgBuy = ($bought > 0) ? ($spent / $bought) : 0;
+    return $amount * ($ppu - $avgBuy);
+}
+
 function _calcAvg(array $txs, float $currentPrice): array
 {
     $totalBought = 0.0;

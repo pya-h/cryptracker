@@ -1204,4 +1204,224 @@ document.addEventListener('DOMContentLoaded', () => {
             window._updateFuturePreviews = updateFuturePreviews;
         }
     }
+
+    /* ═══════════════════════════════════════════════════════
+       ── Token Swap / Convert Modal ───────────────────────
+       Converts the current token (A) directly into another
+       tracked token (B): records a sell of A and a buy of B.
+       Two-way amount binding, value always conserved.
+       ═══════════════════════════════════════════════════════ */
+
+    if (page === 'token') {
+        const swapOverlay  = document.getElementById('swapOverlay');
+        const openSwapBtn  = document.getElementById('openSwap');
+        const targetSelect = document.getElementById('swapTargetSelect');
+
+        if (swapOverlay && openSwapBtn && targetSelect && Array.isArray(window._swapTargets)) {
+            const byId = {};
+            window._swapTargets.forEach(t => { byId[String(t.id)] = t; });
+
+            const closeSwapBtn  = document.getElementById('closeSwap');
+            const form          = document.getElementById('swapForm');
+            const amountAInput  = document.getElementById('swapAmountA');
+            const amountBInput  = document.getElementById('swapAmountB');
+            const priceAInput   = document.getElementById('swapPriceA');
+            const priceBInput   = document.getElementById('swapPriceB');
+            const ratioInput    = document.getElementById('swapRatioInput');
+            const targetIdInput = document.getElementById('swapTargetId');
+            const rateLine      = document.getElementById('swapRate');
+            const errorLine     = document.getElementById('swapError');
+            const submitBtn     = document.getElementById('swapSubmit');
+            const maxBtn        = document.getElementById('swapMax');
+            const advanced      = document.getElementById('swapAdvanced');
+
+            const fromPriceEl = document.getElementById('swapFromPrice');
+            const fromHoldEl  = document.getElementById('swapFromHoldings');
+            const fromValEl   = document.getElementById('swapFromValue');
+            const toPriceEl   = document.getElementById('swapToPrice');
+            const toHoldEl    = document.getElementById('swapToHoldings');
+            const toValEl     = document.getElementById('swapToValue');
+            const symBEls     = document.querySelectorAll('.js-symB');
+
+            const symA      = main.dataset.symbol || 'A';
+            const holdingsA = parseFloat(main.dataset.holdings) || 0;
+            const sourceCmc = main.dataset.cmcId;
+
+            let currentTarget = null;
+            let syncing = false;   // guards the two-way binding from feedback loops
+
+            const num = el => parseFloat(el.value) || 0;
+            const priceDec = () => Math.max(getPrec(), 2);
+
+            function trimNum(v) {
+                if (!isFinite(v) || v <= 0) return '';
+                return parseFloat(v.toFixed(12)).toString();
+            }
+            function fmtPrice(v) { return v > 0 ? formatUSD(v, priceDec()) : '—'; }
+
+            function setSymB(sym) { symBEls.forEach(el => { el.textContent = sym; }); }
+
+            function updateRateLine() {
+                const pa = num(priceAInput), pb = num(priceBInput);
+                if (pa > 0 && pb > 0 && currentTarget) {
+                    const r = pa / pb;
+                    rateLine.textContent = '1 ' + symA + ' ≈ ' + formatCryptoJS(r) + ' ' + currentTarget.symbol
+                        + '   ·   1 ' + currentTarget.symbol + ' ≈ ' + formatCryptoJS(1 / r) + ' ' + symA;
+                } else {
+                    rateLine.textContent = 'Enter prices to see the exchange rate.';
+                }
+            }
+
+            function updateRatioField() {
+                const pa = num(priceAInput), pb = num(priceBInput);
+                if (pa > 0 && pb > 0) ratioInput.value = trimNum(pa / pb);
+            }
+
+            function recalcFromA() {
+                const pa = num(priceAInput), pb = num(priceBInput), a = num(amountAInput);
+                if (pa > 0 && pb > 0 && a > 0) amountBInput.value = trimNum(a * pa / pb);
+            }
+            function recalcFromB() {
+                const pa = num(priceAInput), pb = num(priceBInput), b = num(amountBInput);
+                if (pa > 0 && pb > 0 && b > 0) amountAInput.value = trimNum(b * pb / pa);
+            }
+
+            function refreshPanels() {
+                const pa = num(priceAInput), pb = num(priceBInput);
+                fromPriceEl.textContent = fmtPrice(pa);
+                fromHoldEl.textContent  = formatCryptoJS(holdingsA) + ' ' + symA;
+                fromValEl.textContent   = pa > 0 ? formatUSD(holdingsA * pa, priceDec()) : '—';
+                if (currentTarget) {
+                    toPriceEl.textContent = fmtPrice(pb);
+                    toHoldEl.textContent  = formatCryptoJS(currentTarget.holdings) + ' ' + currentTarget.symbol;
+                    toValEl.textContent   = pb > 0 ? formatUSD(currentTarget.holdings * pb, priceDec()) : '—';
+                }
+            }
+
+            function validate() {
+                const a = num(amountAInput), b = num(amountBInput);
+                const pa = num(priceAInput), pb = num(priceBInput);
+                let err = '';
+                if (a > holdingsA + 1e-9) {
+                    err = 'You only hold ' + formatCryptoJS(holdingsA) + ' ' + symA + '.';
+                } else if ((a > 0 || b > 0) && (pa <= 0 || pb <= 0)) {
+                    err = 'Enter a price for both tokens (open Advanced pricing).';
+                }
+                if (err) {
+                    errorLine.textContent = err;
+                    errorLine.style.display = '';
+                    submitBtn.disabled = true;
+                } else {
+                    errorLine.style.display = 'none';
+                    submitBtn.disabled = !(a > 0 && b > 0 && pa > 0 && pb > 0);
+                }
+            }
+
+            function afterAnyChange() { refreshPanels(); updateRateLine(); validate(); }
+
+            amountAInput.addEventListener('input', () => {
+                if (syncing) return; syncing = true; recalcFromA(); syncing = false; afterAnyChange();
+            });
+            amountBInput.addEventListener('input', () => {
+                if (syncing) return; syncing = true; recalcFromB(); syncing = false; afterAnyChange();
+            });
+            priceAInput.addEventListener('input', () => {
+                if (syncing) return; syncing = true; recalcFromA(); updateRatioField(); syncing = false; afterAnyChange();
+            });
+            priceBInput.addEventListener('input', () => {
+                if (syncing) return; syncing = true; recalcFromA(); updateRatioField(); syncing = false; afterAnyChange();
+            });
+            ratioInput.addEventListener('input', () => {
+                if (syncing) return; syncing = true;
+                const r = num(ratioInput), pa = num(priceAInput);
+                if (r > 0 && pa > 0) { priceBInput.value = trimNum(pa / r); recalcFromA(); }
+                syncing = false; afterAnyChange();
+            });
+
+            maxBtn.addEventListener('click', () => {
+                syncing = true;
+                amountAInput.value = holdingsA > 0 ? trimNum(holdingsA) : '';
+                recalcFromA();
+                syncing = false; afterAnyChange();
+            });
+
+            async function fetchPrices(cmcIds) {
+                try {
+                    const res = await fetch('api_prices.php?ids=' + cmcIds.join(','), { cache: 'no-store' });
+                    if (!res.ok) return {};
+                    const payload = await res.json();
+                    return (payload && payload.quotes) ? payload.quotes : (payload || {});
+                } catch (_) { return {}; }
+            }
+
+            async function populatePrices() {
+                const tgt = currentTarget;
+                if (!tgt) return;
+
+                const seedA = parseFloat(main.dataset.currentPrice) || 0;
+                if (seedA > 0 && num(priceAInput) === 0) priceAInput.value = trimNum(seedA);
+                syncing = true; updateRatioField(); recalcFromA(); syncing = false; afterAnyChange();
+
+                const ids = [];
+                if (sourceCmc) ids.push(sourceCmc);
+                if (tgt.cmc_id) ids.push(tgt.cmc_id);
+                if (!ids.length) return;
+
+                const quotes = await fetchPrices(ids);
+                if (!swapOverlay.classList.contains('open') || currentTarget !== tgt) return;
+
+                const qa = quotes[String(sourceCmc)];
+                const qb = quotes[String(tgt.cmc_id)];
+                if (qa && qa.price > 0) priceAInput.value = trimNum(qa.price);
+                if (qb && qb.price > 0) priceBInput.value = trimNum(qb.price);
+
+                syncing = true; updateRatioField(); recalcFromA(); syncing = false; afterAnyChange();
+            }
+
+            function openModal() {
+                const tgt = byId[targetSelect.value];
+                if (!tgt) return;
+                currentTarget = tgt;
+                targetIdInput.value = tgt.id;
+                setSymB(tgt.symbol);
+
+                priceAInput.value = '';
+                priceBInput.value = '';
+                ratioInput.value  = '';
+                amountBInput.value = '';
+                amountAInput.value = holdingsA > 0 ? trimNum(holdingsA) : '';
+                errorLine.style.display = 'none';
+                if (advanced) advanced.open = false;
+
+                refreshPanels();
+                updateRateLine();
+                submitBtn.disabled = true;
+
+                swapOverlay.classList.add('open');
+                requestAnimationFrame(() => { swapOverlay.style.opacity = '1'; });
+
+                populatePrices();
+            }
+            function closeModal() {
+                swapOverlay.style.opacity = '0';
+                setTimeout(() => swapOverlay.classList.remove('open'), 250);
+            }
+
+            openSwapBtn.addEventListener('click', openModal);
+            if (closeSwapBtn) closeSwapBtn.addEventListener('click', closeModal);
+            swapOverlay.addEventListener('click', e => { if (e.target === swapOverlay) closeModal(); });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && swapOverlay.classList.contains('open')) closeModal();
+            });
+
+            form.addEventListener('submit', e => {
+                const a = num(amountAInput), b = num(amountBInput);
+                const pa = num(priceAInput), pb = num(priceBInput);
+                if (!(a > 0 && b > 0 && pa > 0 && pb > 0) || a > holdingsA + 1e-9) {
+                    e.preventDefault();
+                    validate();
+                }
+            });
+        }
+    }
 });

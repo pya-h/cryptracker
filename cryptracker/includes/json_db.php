@@ -204,11 +204,13 @@ function dbGetTransactionsDesc(int $userTokenId): array
     return array_reverse(dbGetTransactions($userTokenId));
 }
 
-function dbInsertTransaction(int $userTokenId, string $type, float $amount, float $ppu, float $totalValue, float $realizedPL): int
+function dbInsertTransaction(int $userTokenId, string $type, float $amount, float $ppu, float $totalValue, float $realizedPL, ?string $note = null): int
 {
     if (!in_array($type, ['buy', 'sell'], true)) {
         throw new InvalidArgumentException("Transaction type must be 'buy' or 'sell'");
     }
+
+    $note = ($note !== null && trim($note) !== '') ? trim($note) : null;
 
     $txs = readTable('transactions');
     $id  = nextId($txs);
@@ -220,6 +222,7 @@ function dbInsertTransaction(int $userTokenId, string $type, float $amount, floa
         'price_per_unit'  => $ppu,
         'total_value'     => $totalValue,
         'realized_pl'     => $realizedPL,
+        'note'            => $note,
         'created_at'      => date('Y-m-d H:i:s'),
     ];
     writeTable('transactions', $txs);

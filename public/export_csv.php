@@ -72,7 +72,7 @@ if ($page === 'token') {
     header('Content-Disposition: attachment; filename="' . $token['symbol'] . '_transactions_' . date('Y-m-d') . '.csv"');
 
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Date', 'Type', 'Amount', 'Price/Unit', 'Total', 'Realized P/L']);
+    fputcsv($out, ['Date', 'Type', 'Amount', 'Price/Unit', 'Total', 'Realized P/L', 'Note']);
 
     foreach ($allTx as $tx) {
         fputcsv($out, [
@@ -82,6 +82,7 @@ if ($page === 'token') {
             round($tx['price_per_unit'], 6),
             round($tx['total_value'], 2),
             $tx['type'] === 'sell' ? round($tx['realized_pl'], 2) : '',
+            csvSafeCell($tx['note'] ?? ''),
         ]);
     }
 
