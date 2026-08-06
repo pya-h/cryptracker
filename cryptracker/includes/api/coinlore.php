@@ -88,12 +88,13 @@ function coinloreGetQuotes(array $cmcIds): array
 
     $coinloreToCmc = [];
     foreach ($cmcIds as $cmcId) {
-        $coinloreId = $mappings[$cmcId]['coinlore_id'] ?? null;
-        if ($coinloreId === null || (int) $coinloreId <= 0) {
-            $coinloreId = $cmcId;
-        }
-        $coinloreToCmc[(int) $coinloreId] = $cmcId;
+        // CMC and CoinLore ids are unrelated spaces; without a real mapping we
+        // must skip (like the other providers) rather than fetch a wrong coin.
+        $coinloreId = (int) ($mappings[$cmcId]['coinlore_id'] ?? 0);
+        if ($coinloreId <= 0) continue;
+        $coinloreToCmc[$coinloreId] = $cmcId;
     }
+    if (empty($coinloreToCmc)) return [];
 
     $providerIds = array_keys($coinloreToCmc);
     $raw = httpGet("https://api.coinlore.net/api/ticker/?id=" . implode(',', $providerIds));

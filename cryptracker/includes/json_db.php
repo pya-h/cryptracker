@@ -200,7 +200,7 @@ function dbGetTransactions(int $userTokenId, ?string $type = null): array
         if ($type !== null && $t['type'] !== $type) return false;
         return true;
     });
-    usort($result, fn($a, $b) => strcmp($a['created_at'], $b['created_at']));
+    usort($result, fn($a, $b) => [$a['created_at'], (int) $a['id']] <=> [$b['created_at'], (int) $b['id']]);
     return array_values($result);
 }
 
@@ -242,10 +242,7 @@ function dbGetTransactionById(int $txId): ?array
     return null;
 }
 
-/**
- * Delete transactions by id. Returns the number of rows actually removed.
- * A single atomic write (temp file + rename) removes all given ids at once.
- */
+/** Delete transactions by id. Returns the number of rows actually removed. */
 function dbDeleteTransactions(array $txIds): int
 {
     $ids = array_flip(array_map('intval', $txIds));

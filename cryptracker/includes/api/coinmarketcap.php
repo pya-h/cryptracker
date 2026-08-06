@@ -59,7 +59,7 @@ function cmcRequest(string $endpoint, array $params = []): ?array
 
 function cmcSearchCoins(string $query): array
 {
-    $data = cmcRequest('/v1/cryptocurrency/map', ['sort' => 'cmc_rank', 'limit' => 5000]);
+    $data = cmcGetAllMap();
     if (!$data) return [];
 
     $query  = strtolower(trim($query));
@@ -139,16 +139,16 @@ function cmcGetQuotes(array $cmcIds): array
 
         $out[$outId] = [
             'price'              => $price,
-            'percent_change_1h'  => $q['percent_change_1h'] ?? 0,
-            'percent_change_24h' => $q['percent_change_24h'] ?? 0,
-            'percent_change_7d'  => $q['percent_change_7d'] ?? 0,
-            'market_cap'         => $q['market_cap'] ?? 0,
-            'volume_24h'         => $q['volume_24h'] ?? 0,
-            'volume_24h_native'  => 0,
-            'csupply'            => $coin['circulating_supply'] ?? 0,
-            'tsupply'            => $coin['total_supply'] ?? 0,
-            'msupply'            => $coin['max_supply'] ?? 0,
-            'rank'               => $coin['cmc_rank'] ?? 0,
+            'percent_change_1h'  => (float) ($q['percent_change_1h'] ?? 0),
+            'percent_change_24h' => (float) ($q['percent_change_24h'] ?? 0),
+            'percent_change_7d'  => (float) ($q['percent_change_7d'] ?? 0),
+            'market_cap'         => (float) ($q['market_cap'] ?? 0),
+            'volume_24h'         => (float) ($q['volume_24h'] ?? 0),
+            'volume_24h_native'  => 0.0,
+            'csupply'            => (float) ($coin['circulating_supply'] ?? 0),
+            'tsupply'            => (float) ($coin['total_supply'] ?? 0),
+            'msupply'            => (float) ($coin['max_supply'] ?? 0),
+            'rank'               => (int) ($coin['cmc_rank'] ?? 0),
         ];
     }
     return $out;

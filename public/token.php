@@ -40,9 +40,6 @@ $totalPL      = $realizedPL;
 $totalSpent   = $pl['total_spent'];
 $plTimeline   = $pl['timeline'];
 
-$plPercent    = 0;
-$totalPercent = 0;
-
 $lastCumRealized = !empty($plTimeline) ? end($plTimeline)['cum_realized'] : 0;
 $lastEntry       = !empty($plTimeline) ? end($plTimeline) : null;
 
@@ -84,7 +81,7 @@ $bankCount     = count($banks);
 $hasBanks      = $bankCount >= 2;
 $bankBreakdown = bankBreakdownForToken($user['id'], $tokenId, $holdings);
 
-layoutHead(e($token['symbol']));
+layoutHead($token['symbol']);
 layoutNav($user);
 ?>
 

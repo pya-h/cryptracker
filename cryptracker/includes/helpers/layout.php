@@ -84,7 +84,7 @@ function layoutNav(array $user): void
             </form>
             <div class="user-menu-wrapper">
                 <button type="button" class="nav-user-btn" id="userMenuBtn">
-                    <span class="user-avatar">' . strtoupper(e($user['username'])[0]) . '</span>
+                    <span class="user-avatar">' . e(strtoupper($user['username'][0])) . '</span>
                     <span class="user-name">' . e($user['username']) . '</span>
                     <span class="user-caret">▾</span>
                 </button>

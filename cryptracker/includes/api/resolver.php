@@ -163,12 +163,8 @@ function resolveCmcIdByMeta(string $symbol, string $name, string $slug): ?int
         }
     }
 
-    // 4. Slug variations: try common transformations
+    // 4. Slug variations: strip common suffixes, or fall back to the symbol.
     if ($slug !== '') {
-        // Try stripping common suffixes/prefixes
-        $slugParts = explode('-', $slug);
-        // Try first part of slug (e.g., "binance-coin" → "binance")
-        // Try removing '-coin', '-token', '-network' suffixes
         $variations = [];
         foreach (['-coin', '-token', '-network', '-protocol'] as $suffix) {
             if (str_ends_with($slug, $suffix)) {
@@ -235,12 +231,8 @@ function _resolveRealCmcIdForStored(int $storedId): ?int
  */
 function _resolveGeckoIdForStored(int $storedId): ?string
 {
-    // Reuse the static tokenMeta cache from _resolveRealCmcIdForStored
-    _resolveRealCmcIdForStored($storedId); // Ensures cache is populated
-
     $idx = tokenLookupIndexes();
 
-    // Build tokenMeta again (or access it)
     static $localMeta = null;
     if ($localMeta === null) {
         $localMeta = [];

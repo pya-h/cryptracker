@@ -168,14 +168,14 @@ function dbInsertUser(string $username, string $email, string $hash): int
 
 function dbGetUserTokens(int $userId): array
 {
-    $stmt = dbPdo()->prepare('SELECT *, coinlore_id, coingecko_id FROM user_tokens WHERE user_id = :u ORDER BY added_at DESC');
+    $stmt = dbPdo()->prepare('SELECT * FROM user_tokens WHERE user_id = :u ORDER BY added_at DESC');
     $stmt->execute([':u' => $userId]);
     return $stmt->fetchAll();
 }
 
 function dbGetUserToken(int $tokenId, int $userId): ?array
 {
-    $stmt = dbPdo()->prepare('SELECT *, coinlore_id, coingecko_id FROM user_tokens WHERE id = :id AND user_id = :uid LIMIT 1');
+    $stmt = dbPdo()->prepare('SELECT * FROM user_tokens WHERE id = :id AND user_id = :uid LIMIT 1');
     $stmt->execute([':id' => $tokenId, ':uid' => $userId]);
     $row = $stmt->fetch();
     return $row ?: null;
@@ -183,7 +183,7 @@ function dbGetUserToken(int $tokenId, int $userId): ?array
 
 function dbGetUserTokenByCmc(int $userId, int $cmcId): ?array
 {
-    $stmt = dbPdo()->prepare('SELECT *, coinlore_id, coingecko_id FROM user_tokens WHERE user_id = :uid AND cmc_id = :cmc LIMIT 1');
+    $stmt = dbPdo()->prepare('SELECT * FROM user_tokens WHERE user_id = :uid AND cmc_id = :cmc LIMIT 1');
     $stmt->execute([':uid' => $userId, ':cmc' => $cmcId]);
     $row = $stmt->fetch();
     return $row ?: null;
@@ -232,14 +232,16 @@ function dbGetTokenSourceMappingsByCmcIds(array $cmcIds): array
     if (empty($cmcIds)) return [];
 
     $ph = implode(',', array_fill(0, count($cmcIds), '?'));
-    $stmt = dbPdo()->prepare('SELECT cmc_id, coinlore_id, coingecko_id FROM user_tokens WHERE cmc_id IN (' . $ph . ') GROUP BY cmc_id');
+    // ORDER BY id ASC + first-wins dedupe keeps this deterministic and matching
+    // the JSON backend when several rows share a cmc_id.
+    $stmt = dbPdo()->prepare('SELECT cmc_id, coinlore_id, coingecko_id FROM user_tokens WHERE cmc_id IN (' . $ph . ') ORDER BY id ASC');
     $stmt->execute($cmcIds);
 
     $rows = $stmt->fetchAll();
     $out = [];
     foreach ($rows as $row) {
         $cmcId = (int) ($row['cmc_id'] ?? 0);
-        if ($cmcId <= 0) continue;
+        if ($cmcId <= 0 || isset($out[$cmcId])) continue;
 
         $coinloreId = isset($row['coinlore_id']) && $row['coinlore_id'] !== null ? (int) $row['coinlore_id'] : null;
         if ($coinloreId !== null && $coinloreId <= 0) $coinloreId = null;

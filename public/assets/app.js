@@ -208,7 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNaN(raw) || raw === 0) return;
 
         const isPL = el.hasAttribute('data-pl');
-        const prefix = el.dataset.prefix || '';
         const decimals = detectDecimals(el.textContent);
         const percentEl = el.querySelector('.pl-percent');
         const percentText = percentEl ? percentEl.textContent : '';
@@ -221,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function tick(now) {
             const t = Math.min((now - start) / duration, 1);
             const val = raw * easeOutExpo(t);
-            el.textContent = formatVal(val, isPL, prefix, decimals);
+            el.textContent = formatVal(val, isPL, decimals);
             if (percentEl) {
                 el.appendChild(percentEl);
                 percentEl.textContent = percentText;
@@ -238,8 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try { return getPrec(); } catch (_) { return 3; }
     }
 
-    function formatVal(v, isPL, prefix, dec) {
-        // Currency-aware; `prefix` is legacy and ignored (symbol comes from cur()).
+    function formatVal(v, isPL, dec) {
         return curFmt(v, isPL, dec);
     }
 
