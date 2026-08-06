@@ -27,12 +27,28 @@ if (!$token || !in_array($type, ['buy', 'sell']) || $amount <= 0 || $ppu <= 0) {
 
 $totalValue = $amount * $ppu;
 $realizedPL = 0;
-if ($type === 'sell') {
-    $row = dbGetTokenStats($userTokenId);
-    $holdings = $row['bought'] - $row['sold'];
 
-    if ($amount > $holdings + 0.000000001) {
-        flash('error', "Cannot sell more than current holdings (" . formatCrypto($holdings) . ").");
+$row      = dbGetTokenStats($userTokenId);
+$holdings = $row['bought'] - $row['sold'];
+
+// Which wallet does this action touch? When the user has a single (default)
+// wallet the selector is hidden and everything routes to it.
+$requestedBankId = (int) ($_POST['bank_id'] ?? 0);
+$bankSel = bankResolveForTrade($user['id'], $userTokenId, $requestedBankId, $holdings);
+if (!$bankSel['ok']) {
+    flash('error', $bankSel['error']);
+    header('Location: token.php?id=' . $token['id']);
+    exit;
+}
+$bank = $bankSel['bank'];
+
+if ($type === 'sell') {
+    // Cap the sell by the chosen wallet's balance. For the sole default wallet
+    // this equals total holdings; for a specific wallet it prevents overdrawing
+    // it (which would break the "Σ wallets = holdings" invariant).
+    if ($amount > $bankSel['balance'] + BANK_EPS) {
+        $where = (bankCount($user['id']) >= 2) ? (' held in ' . $bank['name']) : '';
+        flash('error', "Cannot sell more than " . formatCrypto($bankSel['balance']) . " {$token['symbol']}{$where}.");
         header('Location: token.php?id=' . $token['id']);
         exit;
     }
@@ -41,8 +57,13 @@ if ($type === 'sell') {
     $realizedPL = realizedPLForSell(dbGetTransactions($userTokenId), $amount, $ppu, $mode);
 }
 $txId = dbInsertTransaction($userTokenId, $type, $amount, $ppu, $totalValue, $realizedPL);
+
+// Keep the chosen wallet's balance current (default wallet self-adjusts as the
+// remainder, so this is a no-op for it). bank_ops let undo reverse the change.
+$bankOps = bankApplyDelta($user['id'], (int) $bank['id'], $userTokenId, ($type === 'buy') ? $amount : -$amount);
+
 undoRecordAction($user['id'], $type, [$txId],
-    ucfirst($type) . ' of ' . formatCrypto($amount) . ' ' . $token['symbol']);
+    ucfirst($type) . ' of ' . formatCrypto($amount) . ' ' . $token['symbol'], $bankOps);
 
 $label = ucfirst($type);
 $plMsg = ($type === 'sell') ? ' | Realized P/L: ' . formatPL($realizedPL) : '';

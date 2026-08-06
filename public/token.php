@@ -77,6 +77,13 @@ foreach (dbGetUserTokens($user['id']) as $t) {
     ];
 }
 
+/* Banks (wallets) — display-only segmentation of this token's holdings. The
+   per-bank selector on trade forms only appears once the user has 2+ banks. */
+$banks         = banksList($user['id']);
+$bankCount     = count($banks);
+$hasBanks      = $bankCount >= 2;
+$bankBreakdown = bankBreakdownForToken($user['id'], $tokenId, $holdings);
+
 layoutHead(e($token['symbol']));
 layoutNav($user);
 ?>
@@ -152,6 +159,84 @@ layoutNav($user);
             </div>
         </section>
 
+        <section class="banks-wrap animate-fade-in-up">
+            <details class="banks-details">
+                <summary class="banks-summary">
+                    <span class="banks-summary-title">&#127974; Banks</span>
+                    <span class="banks-summary-sub">Split your <?= e($token['symbol']) ?> across wallets</span>
+                    <span class="banks-caret" aria-hidden="true">&#9662;</span>
+                </summary>
+                <div class="banks-panel">
+                    <p class="banks-intro">
+                        Track how your holdings are spread across wallets or exchanges. This is for
+                        your own reference only &mdash; it never affects P/L, charts, or history.
+                        Your <strong><?= formatCrypto($holdings) ?> <?= e($token['symbol']) ?></strong> is split as:
+                    </p>
+
+                    <div class="bank-list" id="bankList">
+                        <?php foreach ($bankBreakdown as $b): ?>
+                        <div class="bank-row" data-bank-balance="<?= $b['amount'] ?>">
+                            <span class="bank-name">
+                                <?= e($b['name']) ?>
+                                <?php if ($b['is_default']): ?><span class="bank-badge">default</span><?php endif; ?>
+                            </span>
+                            <span class="bank-amount"><?= formatCrypto($b['amount']) ?> <?= e($token['symbol']) ?></span>
+                            <span class="bank-value" data-bank-value>&mdash;</span>
+                            <?php if (!$b['is_default']): ?>
+                            <form method="POST" action="bank.php" class="bank-del-form"
+                                  onsubmit="return confirm('Remove the bank &quot;<?= e($b['name']) ?>&quot;? It must be empty of every token first.');">
+                                <?= csrfField() ?>
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="bank_id" value="<?= (int) $b['id'] ?>">
+                                <input type="hidden" name="return_id" value="<?= (int) $tokenId ?>">
+                                <button type="submit" class="bank-del-btn" title="Remove bank" aria-label="Remove bank">&times;</button>
+                            </form>
+                            <?php else: ?>
+                            <span class="bank-del-spacer" aria-hidden="true"></span>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="bank-actions">
+                        <form method="POST" action="bank.php" class="bank-add-form">
+                            <?= csrfField() ?>
+                            <input type="hidden" name="action" value="create">
+                            <input type="hidden" name="return_id" value="<?= (int) $tokenId ?>">
+                            <input type="text" name="bank_name" maxlength="40" required placeholder="New bank name"
+                                   pattern="[A-Za-z0-9 ._#()\-]{1,40}"
+                                   title="1-40 characters: letters, numbers, spaces, . _ - # ( )">
+                            <button type="submit" class="btn btn-primary btn-sm">+ Add Bank</button>
+                        </form>
+
+                        <?php if ($hasBanks): ?>
+                        <form method="POST" action="bank.php" class="bank-move-form">
+                            <?= csrfField() ?>
+                            <input type="hidden" name="action" value="move">
+                            <input type="hidden" name="token_id" value="<?= (int) $tokenId ?>">
+                            <input type="hidden" name="return_id" value="<?= (int) $tokenId ?>">
+                            <span class="bank-move-title">Move <?= e($token['symbol']) ?></span>
+                            <input type="number" name="amount" step="any" min="0.00000001" required
+                                   placeholder="Amount" id="bankMoveAmount">
+                            <select name="from_bank_id" id="bankMoveFrom" class="bank-select">
+                                <?php foreach ($bankBreakdown as $b): ?>
+                                <option value="<?= (int) $b['id'] ?>"><?= e($b['name']) ?><?= $b['is_default'] ? ' (default)' : '' ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <span class="bank-move-arrow" aria-hidden="true">&rarr;</span>
+                            <select name="to_bank_id" id="bankMoveTo" class="bank-select">
+                                <?php foreach ($bankBreakdown as $b): ?>
+                                <option value="<?= (int) $b['id'] ?>"><?= e($b['name']) ?><?= $b['is_default'] ? ' (default)' : '' ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="btn btn-primary btn-sm">Move</button>
+                        </form>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </details>
+        </section>
+
         <section class="market-data-section animate-fade-in-up">
             <h2>Market Data</h2>
             <div class="market-grid">
@@ -205,6 +290,15 @@ layoutNav($user);
                     <input type="number" name="price_per_unit" step="any" min="0.00000001" required
                            value="" placeholder="Loading price…" id="buyPrice">
 
+                    <?php if ($hasBanks): ?>
+                    <label>Deposit into bank</label>
+                    <select name="bank_id" id="buyBankSelect" class="bank-select">
+                        <?php foreach ($banks as $b): ?>
+                        <option value="<?= (int) $b['id'] ?>"><?= e($b['name']) ?><?= !empty($b['is_default']) ? ' (default)' : '' ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php endif; ?>
+
                     <div class="future-preview" id="buyPreview" style="display:none;">
                         <div class="future-preview-label">After this buy:</div>
                         <div class="future-preview-row">
@@ -234,11 +328,21 @@ layoutNav($user);
 
                     <label>Amount (<?= e($token['symbol']) ?>)</label>
                     <input type="number" name="amount" step="any" min="0.00000001"
-                           max="<?= $holdings ?>" required placeholder="0.00" id="sellAmount">
+                           max="<?= $hasBanks ? $bankBreakdown[0]['amount'] : $holdings ?>" required placeholder="0.00" id="sellAmount">
 
                     <label>Price per unit (USD)</label>
                     <input type="number" name="price_per_unit" step="any" min="0.00000001" required
                            value="" placeholder="Loading price…" id="sellPrice">
+
+                    <?php if ($hasBanks): ?>
+                    <label>Sell from bank</label>
+                    <select name="bank_id" id="sellBankSelect" class="bank-select">
+                        <?php foreach ($banks as $b): ?>
+                        <option value="<?= (int) $b['id'] ?>"><?= e($b['name']) ?><?= !empty($b['is_default']) ? ' (default)' : '' ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small class="bank-hint" id="sellBankHint"></small>
+                    <?php endif; ?>
 
                     <div class="future-preview" id="sellPreview" style="display:none;">
                         <div class="future-preview-label">After this sell:</div>
@@ -461,6 +565,27 @@ layoutNav($user);
                     <input type="hidden" name="user_token_id" value="<?= (int) $token['id'] ?>">
                     <input type="hidden" name="target_token_id" id="swapTargetId" value="">
 
+                    <?php if ($hasBanks): ?>
+                    <div class="swap-banks">
+                        <div class="swap-bank-field">
+                            <label for="swapSourceBank">From bank (<?= e($token['symbol']) ?>)</label>
+                            <select name="source_bank_id" id="swapSourceBank" class="bank-select">
+                                <?php foreach ($banks as $b): ?>
+                                <option value="<?= (int) $b['id'] ?>"><?= e($b['name']) ?><?= !empty($b['is_default']) ? ' (default)' : '' ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="swap-bank-field">
+                            <label for="swapTargetBank">Into bank (<span class="js-symB">&mdash;</span>)</label>
+                            <select name="target_bank_id" id="swapTargetBank" class="bank-select">
+                                <?php foreach ($banks as $b): ?>
+                                <option value="<?= (int) $b['id'] ?>"><?= e($b['name']) ?><?= !empty($b['is_default']) ? ' (default)' : '' ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <label for="swapAmountA">You convert (<?= e($token['symbol']) ?>)</label>
                     <div class="swap-input-row">
                         <input type="number" step="any" min="0" name="amount_a" id="swapAmountA" placeholder="0.00" autocomplete="off" inputmode="decimal">
@@ -500,6 +625,8 @@ layoutNav($user);
     <script>
     window._plGraphData = <?= $graphData ?>;
     window._plHiddenSeries = new Set();
+    window._banks = <?= json_encode($bankBreakdown, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    window._hasBanks = <?= $hasBanks ? 'true' : 'false' ?>;
     </script>
     <script src="assets/graph.js?v=<?= filemtime(__DIR__ . '/assets/graph.js') ?>"></script>
 

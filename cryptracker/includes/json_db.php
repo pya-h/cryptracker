@@ -185,6 +185,11 @@ function dbDeleteUserToken(int $tokenId): void
     $txs = readTable('transactions');
     $txs = array_values(array_filter($txs, fn($t) => $t['user_token_id'] !== $tokenId));
     writeTable('transactions', $txs);
+
+    // Drop any per-bank balances that referenced this token.
+    $bal = readTable('bank_balances');
+    $filtered = array_values(array_filter($bal, fn($r) => (int) $r['user_token_id'] !== $tokenId));
+    if (count($filtered) !== count($bal)) writeTable('bank_balances', $filtered);
 }
 
 function dbGetTransactions(int $userTokenId, ?string $type = null): array
@@ -342,9 +347,146 @@ function dbSetUserUndo(int $userId, ?array $undo): bool
     return $updated;
 }
 
+/* ── Banks (global per-user wallets that segment holdings) ──────────
+ * A "bank" is a wallet owned by the user; only NON-default banks store an
+ * explicit per-token balance in `bank_balances`. The default bank's balance
+ * for a token is derived elsewhere as the remainder of total holdings (see
+ * helpers/bank.php), so it is never persisted here. */
+
+function dbEnsureDefaultBank(int $userId): int
+{
+    $banks = readTable('banks');
+    foreach ($banks as $b) {
+        if ((int) $b['user_id'] === $userId && !empty($b['is_default'])) {
+            return (int) $b['id'];
+        }
+    }
+    $id = nextId($banks);
+    $banks[] = [
+        'id'         => $id,
+        'user_id'    => $userId,
+        'name'       => 'Main',
+        'is_default' => 1,
+        'created_at' => date('Y-m-d H:i:s'),
+    ];
+    writeTable('banks', $banks);
+    return $id;
+}
+
+function dbGetBanks(int $userId): array
+{
+    $rows = array_values(array_filter(readTable('banks'), fn($b) => (int) $b['user_id'] === $userId));
+    foreach ($rows as &$b) { $b['is_default'] = !empty($b['is_default']) ? 1 : 0; }
+    unset($b);
+    // Default first, then oldest-created (id ascending) for stable ordering.
+    usort($rows, function ($a, $b) {
+        if ($a['is_default'] !== $b['is_default']) return $b['is_default'] <=> $a['is_default'];
+        return (int) $a['id'] <=> (int) $b['id'];
+    });
+    return $rows;
+}
+
+function dbGetBank(int $bankId, int $userId): ?array
+{
+    foreach (readTable('banks') as $b) {
+        if ((int) $b['id'] === $bankId && (int) $b['user_id'] === $userId) {
+            $b['is_default'] = !empty($b['is_default']) ? 1 : 0;
+            return $b;
+        }
+    }
+    return null;
+}
+
+function dbCreateBank(int $userId, string $name): int
+{
+    $banks = readTable('banks');
+    $id    = nextId($banks);
+    $banks[] = [
+        'id'         => $id,
+        'user_id'    => $userId,
+        'name'       => $name,
+        'is_default' => 0,
+        'created_at' => date('Y-m-d H:i:s'),
+    ];
+    writeTable('banks', $banks);
+    return $id;
+}
+
+function dbDeleteBank(int $bankId): void
+{
+    $banks = array_values(array_filter(readTable('banks'), fn($b) => (int) $b['id'] !== $bankId));
+    writeTable('banks', $banks);
+    $bal = array_values(array_filter(readTable('bank_balances'), fn($r) => (int) $r['bank_id'] !== $bankId));
+    writeTable('bank_balances', $bal);
+}
+
+function dbGetBankBalance(int $bankId, int $userTokenId): float
+{
+    foreach (readTable('bank_balances') as $r) {
+        if ((int) $r['bank_id'] === $bankId && (int) $r['user_token_id'] === $userTokenId) {
+            return (float) $r['amount'];
+        }
+    }
+    return 0.0;
+}
+
+/** Map of bank_id => amount for every explicit (non-default) balance of a token. */
+function dbGetBankBalancesForToken(int $userTokenId): array
+{
+    $out = [];
+    foreach (readTable('bank_balances') as $r) {
+        if ((int) $r['user_token_id'] === $userTokenId) {
+            $out[(int) $r['bank_id']] = (float) $r['amount'];
+        }
+    }
+    return $out;
+}
+
+/** Upsert a bank's per-token balance; near-zero balances are removed. */
+function dbSetBankBalance(int $bankId, int $userTokenId, float $amount): void
+{
+    $rows  = readTable('bank_balances');
+    $isZero = abs($amount) < 1e-12;
+
+    if ($isZero) {
+        $filtered = array_values(array_filter($rows, fn($r) =>
+            !((int) $r['bank_id'] === $bankId && (int) $r['user_token_id'] === $userTokenId)));
+        if (count($filtered) !== count($rows)) writeTable('bank_balances', $filtered);
+        return;
+    }
+
+    foreach ($rows as &$r) {
+        if ((int) $r['bank_id'] === $bankId && (int) $r['user_token_id'] === $userTokenId) {
+            $r['amount'] = $amount;
+            writeTable('bank_balances', $rows);
+            return;
+        }
+    }
+    unset($r);
+
+    $rows[] = [
+        'id'            => nextId($rows),
+        'bank_id'       => $bankId,
+        'user_token_id' => $userTokenId,
+        'amount'        => $amount,
+    ];
+    writeTable('bank_balances', $rows);
+}
+
+/** Does this bank hold a non-negligible balance of any token? */
+function dbBankHasAnyBalance(int $bankId): bool
+{
+    foreach (readTable('bank_balances') as $r) {
+        if ((int) $r['bank_id'] === $bankId && abs((float) $r['amount']) > 1e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function dbPurgeAll(): void
 {
-    foreach (['users', 'user_tokens', 'transactions'] as $t) {
+    foreach (['users', 'user_tokens', 'transactions', 'banks', 'bank_balances'] as $t) {
         writeTable($t, []);
     }
 }

@@ -26,7 +26,7 @@ const SWAP_VALUE_TOLERANCE = 0.01; // 1% relative mismatch allowed between legs.
  *    'token_a' => array, 'token_b' => array, 'amount_a' => float, 'amount_b' => float]
  *   ['ok' => false, 'error' => string]
  */
-function swapTokens(int $userId, int $sourceId, int $targetId, float $amountA, float $amountB, float $priceA, float $priceB, string $mode): array
+function swapTokens(int $userId, int $sourceId, int $targetId, float $amountA, float $amountB, float $priceA, float $priceB, string $mode, int $sourceBankId = 0, int $targetBankId = 0): array
 {
     $fail = fn(string $msg): array => ['ok' => false, 'error' => $msg];
 
@@ -51,6 +51,21 @@ function swapTokens(int $userId, int $sourceId, int $targetId, float $amountA, f
         return $fail('Cannot swap more than current holdings (' . formatCrypto($holdings) . ' ' . $tokenA['symbol'] . ').');
     }
 
+    // Resolve the source wallet (caps how much we can give up) and the target
+    // wallet (receives the bought amount). With a single wallet both route to
+    // the default, preserving pre-banks behaviour.
+    $srcSel = bankResolveForTrade($userId, $sourceId, $sourceBankId, $holdings);
+    if (!$srcSel['ok']) return $fail($srcSel['error']);
+    if ($amountA > $srcSel['balance'] + BANK_EPS) {
+        $where = (bankCount($userId) >= 2) ? (' in ' . $srcSel['bank']['name']) : '';
+        return $fail('Cannot swap more than ' . formatCrypto($srcSel['balance']) . ' ' . $tokenA['symbol'] . $where . '.');
+    }
+
+    $tStats = dbGetTokenStats($targetId);
+    $tHold  = $tStats['bought'] - $tStats['sold'];
+    $tgtSel = bankResolveForTrade($userId, $targetId, $targetBankId, $tHold);
+    if (!$tgtSel['ok']) return $fail($tgtSel['error']);
+
     // Enforce value conservation between the two legs.
     $valueA = $amountA * $priceA;
     $valueB = $amountB * $priceB;
@@ -68,6 +83,12 @@ function swapTokens(int $userId, int $sourceId, int $targetId, float $amountA, f
     $sellId = dbInsertTransaction($sourceId, 'sell', $amountA, $priceA, $valueA, $realizedPL, $noteSell);
     $buyId  = dbInsertTransaction($targetId, 'buy',  $amountB, $priceB, $valueB, 0.0,        $noteBuy);
 
+    // Move the source wallet's balance out and the target wallet's balance in.
+    $bankOps = array_merge(
+        bankApplyDelta($userId, (int) $srcSel['bank']['id'], $sourceId, -$amountA),
+        bankApplyDelta($userId, (int) $tgtSel['bank']['id'], $targetId,  $amountB)
+    );
+
     return [
         'ok'          => true,
         'error'       => null,
@@ -78,5 +99,6 @@ function swapTokens(int $userId, int $sourceId, int $targetId, float $amountA, f
         'token_b'     => $tokenB,
         'amount_a'    => $amountA,
         'amount_b'    => $amountB,
+        'bank_ops'    => $bankOps,
     ];
 }

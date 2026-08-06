@@ -31,18 +31,24 @@ const UNDO_KINDS = ['buy', 'sell', 'swap'];
  * Called by the buy/sell and swap endpoints right after their transactions are
  * written. Silently ignores unknown kinds or empty id lists.
  */
-function undoRecordAction(int $userId, string $kind, array $txIds, string $label): void
+function undoRecordAction(int $userId, string $kind, array $txIds, string $label, array $bankOps = []): void
 {
     if (!in_array($kind, UNDO_KINDS, true)) return;
 
     $txIds = array_values(array_filter(array_map('intval', $txIds), fn($id) => $id > 0));
     if (empty($txIds)) return;
 
-    dbSetUserUndo($userId, [
+    $record = [
         'tx_ids' => $txIds,
         'kind'   => $kind,
         'label'  => $label,
-    ]);
+    ];
+    // Non-default wallet balance changes to reverse if this action is undone.
+    if (!empty($bankOps)) {
+        $record['bank_ops'] = array_values($bankOps);
+    }
+
+    dbSetUserUndo($userId, $record);
 }
 
 /**
@@ -59,9 +65,10 @@ function getUndoableAction(int $userId): ?array
     if (empty($txIds)) return null;
 
     return [
-        'tx_ids' => $txIds,
-        'kind'   => in_array(($undo['kind'] ?? ''), UNDO_KINDS, true) ? $undo['kind'] : 'action',
-        'label'  => (string) ($undo['label'] ?? ''),
+        'tx_ids'   => $txIds,
+        'kind'     => in_array(($undo['kind'] ?? ''), UNDO_KINDS, true) ? $undo['kind'] : 'action',
+        'label'    => (string) ($undo['label'] ?? ''),
+        'bank_ops' => (isset($undo['bank_ops']) && is_array($undo['bank_ops'])) ? $undo['bank_ops'] : [],
     ];
 }
 
@@ -104,6 +111,9 @@ function undoLastAction(int $userId): array
     }
 
     $deleted = dbDeleteTransactions($txIds);
+    // Reverse any non-default wallet balance changes this action made. Safe
+    // because any intervening bank op would have cleared this undo record.
+    bankReverseOps($undo['bank_ops'] ?? []);
     dbSetUserUndo($userId, null);
 
     return [

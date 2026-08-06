@@ -104,6 +104,28 @@ function dbEnsureSchema(PDO $pdo): void
     if (!isset($txExisting['note'])) {
         $pdo->exec('ALTER TABLE transactions ADD COLUMN note TEXT NULL');
     }
+
+    // Banks: global per-user wallets that segment holdings (see helpers/bank.php).
+    $pdo->exec('CREATE TABLE IF NOT EXISTS banks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_banks_user ON banks(user_id)');
+
+    // Only NON-default banks store rows here; the default wallet is the remainder.
+    $pdo->exec('CREATE TABLE IF NOT EXISTS bank_balances (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bank_id INTEGER NOT NULL,
+        user_token_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        FOREIGN KEY (bank_id) REFERENCES banks(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_token_id) REFERENCES user_tokens(id) ON DELETE CASCADE
+    )');
+    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bank_balances_bt ON bank_balances(bank_id, user_token_id)');
 }
 
 function dbGetUserById(int $id): ?array
@@ -380,11 +402,107 @@ function dbSetUserUndo(int $userId, ?array $undo): bool
     return true;
 }
 
+/* ── Banks (global per-user wallets) ────────────────────────────────
+ * Mirrors the JSON backend. Only non-default banks persist a per-token
+ * balance; the default wallet's balance is derived (see helpers/bank.php). */
+
+function dbEnsureDefaultBank(int $userId): int
+{
+    $stmt = dbPdo()->prepare('SELECT id FROM banks WHERE user_id = :u AND is_default = 1 LIMIT 1');
+    $stmt->execute([':u' => $userId]);
+    $row = $stmt->fetch();
+    if ($row) return (int) $row['id'];
+
+    $ins = dbPdo()->prepare('INSERT INTO banks (user_id, name, is_default, created_at) VALUES (:u, :n, 1, :c)');
+    $ins->execute([':u' => $userId, ':n' => 'Main', ':c' => date('Y-m-d H:i:s')]);
+    return (int) dbPdo()->lastInsertId();
+}
+
+function dbGetBanks(int $userId): array
+{
+    $stmt = dbPdo()->prepare('SELECT * FROM banks WHERE user_id = :u ORDER BY is_default DESC, id ASC');
+    $stmt->execute([':u' => $userId]);
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$b) { $b['is_default'] = (int) $b['is_default']; }
+    return $rows;
+}
+
+function dbGetBank(int $bankId, int $userId): ?array
+{
+    $stmt = dbPdo()->prepare('SELECT * FROM banks WHERE id = :id AND user_id = :u LIMIT 1');
+    $stmt->execute([':id' => $bankId, ':u' => $userId]);
+    $row = $stmt->fetch();
+    if (!$row) return null;
+    $row['is_default'] = (int) $row['is_default'];
+    return $row;
+}
+
+function dbCreateBank(int $userId, string $name): int
+{
+    $stmt = dbPdo()->prepare('INSERT INTO banks (user_id, name, is_default, created_at) VALUES (:u, :n, 0, :c)');
+    $stmt->execute([':u' => $userId, ':n' => $name, ':c' => date('Y-m-d H:i:s')]);
+    return (int) dbPdo()->lastInsertId();
+}
+
+function dbDeleteBank(int $bankId): void
+{
+    // bank_balances rows cascade via the FK, but delete explicitly for parity
+    // with the JSON backend and in case foreign_keys is unavailable.
+    $del = dbPdo()->prepare('DELETE FROM bank_balances WHERE bank_id = :b');
+    $del->execute([':b' => $bankId]);
+    $stmt = dbPdo()->prepare('DELETE FROM banks WHERE id = :id');
+    $stmt->execute([':id' => $bankId]);
+}
+
+function dbGetBankBalance(int $bankId, int $userTokenId): float
+{
+    $stmt = dbPdo()->prepare('SELECT amount FROM bank_balances WHERE bank_id = :b AND user_token_id = :t LIMIT 1');
+    $stmt->execute([':b' => $bankId, ':t' => $userTokenId]);
+    $row = $stmt->fetch();
+    return $row ? (float) $row['amount'] : 0.0;
+}
+
+function dbGetBankBalancesForToken(int $userTokenId): array
+{
+    $stmt = dbPdo()->prepare('SELECT bank_id, amount FROM bank_balances WHERE user_token_id = :t');
+    $stmt->execute([':t' => $userTokenId]);
+    $out = [];
+    foreach ($stmt->fetchAll() as $r) {
+        $out[(int) $r['bank_id']] = (float) $r['amount'];
+    }
+    return $out;
+}
+
+function dbSetBankBalance(int $bankId, int $userTokenId, float $amount): void
+{
+    if (abs($amount) < 1e-12) {
+        $del = dbPdo()->prepare('DELETE FROM bank_balances WHERE bank_id = :b AND user_token_id = :t');
+        $del->execute([':b' => $bankId, ':t' => $userTokenId]);
+        return;
+    }
+
+    $upd = dbPdo()->prepare('UPDATE bank_balances SET amount = :a WHERE bank_id = :b AND user_token_id = :t');
+    $upd->execute([':a' => $amount, ':b' => $bankId, ':t' => $userTokenId]);
+    if ($upd->rowCount() === 0) {
+        $ins = dbPdo()->prepare('INSERT INTO bank_balances (bank_id, user_token_id, amount) VALUES (:b, :t, :a)');
+        $ins->execute([':b' => $bankId, ':t' => $userTokenId, ':a' => $amount]);
+    }
+}
+
+function dbBankHasAnyBalance(int $bankId): bool
+{
+    $stmt = dbPdo()->prepare('SELECT 1 FROM bank_balances WHERE bank_id = :b AND ABS(amount) > 1e-9 LIMIT 1');
+    $stmt->execute([':b' => $bankId]);
+    return $stmt->fetch() !== false;
+}
+
 function dbPurgeAll(): void
 {
     $pdo = dbPdo();
+    $pdo->exec('DELETE FROM bank_balances');
+    $pdo->exec('DELETE FROM banks');
     $pdo->exec('DELETE FROM transactions');
     $pdo->exec('DELETE FROM user_tokens');
     $pdo->exec('DELETE FROM users');
-    $pdo->exec('DELETE FROM sqlite_sequence WHERE name IN ("transactions", "user_tokens", "users")');
+    $pdo->exec('DELETE FROM sqlite_sequence WHERE name IN ("transactions", "user_tokens", "users", "banks", "bank_balances")');
 }

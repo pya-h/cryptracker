@@ -257,6 +257,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const page = main.dataset.page;
 
+    // Per-bank balance of THIS token (id → amount), for the wallet selectors.
+    const _bankBal = {};
+    (window._banks || []).forEach(b => { _bankBal[String(b.id)] = parseFloat(b.amount) || 0; });
+
     function getPrec() {
         return parseInt(main.dataset.precision) || 3;
     }
@@ -565,6 +569,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         } catch (e) { console.error('[CrypTracker] market data update error:', e); }
+
+        // ── Per-bank value (Banks section) ──
+        // Balances are crypto amounts; value = amount × live price, shown in the
+        // active display currency. Purely presentational — no P/L involved.
+        try {
+            document.querySelectorAll('.bank-row[data-bank-balance]').forEach(row => {
+                const bal = parseFloat(row.dataset.bankBalance) || 0;
+                const valEl = row.querySelector('[data-bank-value]');
+                if (valEl) { valEl.textContent = formatUSD(bal * newPrice, dec); flashEl(valEl); }
+            });
+        } catch (e) { console.error('[CrypTracker] bank value update error:', e); }
 
         // Update "Now" row in analytics table
         const nowRow = document.querySelector('tr[data-live-now="1"]');
@@ -1273,6 +1288,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ═══════════════════════════════════════════════════════
+       ── Bank (wallet) selector on the Sell form ──────────
+       When the user has 2+ wallets, selling is capped by the
+       chosen wallet's balance of this token (server-enforced).
+       ═══════════════════════════════════════════════════════ */
+
+    if (page === 'token') {
+        const sellBankSelect = document.getElementById('sellBankSelect');
+        const sellAmountEl    = document.getElementById('sellAmount');
+        const sellBankHint    = document.getElementById('sellBankHint');
+        const sym             = main.dataset.symbol || '';
+
+        if (sellBankSelect && sellAmountEl) {
+            const applySellBank = () => {
+                const bal = _bankBal[sellBankSelect.value] || 0;
+                sellAmountEl.max = bal;
+                if (sellBankHint) {
+                    sellBankHint.textContent = 'Available here: ' + formatCryptoJS(bal) + ' ' + sym;
+                }
+            };
+            sellBankSelect.addEventListener('change', applySellBank);
+            applySellBank();
+        }
+    }
+
+    /* ═══════════════════════════════════════════════════════
        ── Token Swap / Convert Modal ───────────────────────
        Converts the current token (A) directly into another
        tracked token (B): records a sell of A and a buy of B.
@@ -1313,6 +1353,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const symA      = main.dataset.symbol || 'A';
             const holdingsA = parseFloat(main.dataset.holdings) || 0;
             const sourceCmc = main.dataset.cmcId;
+            const sourceBankSelect = document.getElementById('swapSourceBank');
+
+            // With 2+ wallets the swap is capped by the selected source wallet's
+            // balance of this token; otherwise by total holdings.
+            const sourceMax = () => (window._hasBanks && sourceBankSelect)
+                ? (_bankBal[sourceBankSelect.value] || 0)
+                : holdingsA;
 
             let currentTarget = null;
             let syncing = false;   // guards the two-way binding from feedback loops
@@ -1355,9 +1402,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             function refreshPanels() {
                 const pa = num(priceAInput), pb = num(priceBInput);
+                const maxA = sourceMax();
                 fromPriceEl.textContent = fmtPrice(pa);
-                fromHoldEl.textContent  = formatCryptoJS(holdingsA) + ' ' + symA;
-                fromValEl.textContent   = pa > 0 ? formatUSD(holdingsA * pa, priceDec()) : '—';
+                fromHoldEl.textContent  = formatCryptoJS(maxA) + ' ' + symA;
+                fromValEl.textContent   = pa > 0 ? formatUSD(maxA * pa, priceDec()) : '—';
                 if (currentTarget) {
                     toPriceEl.textContent = fmtPrice(pb);
                     toHoldEl.textContent  = formatCryptoJS(currentTarget.holdings) + ' ' + currentTarget.symbol;
@@ -1368,9 +1416,11 @@ document.addEventListener('DOMContentLoaded', () => {
             function validate() {
                 const a = num(amountAInput), b = num(amountBInput);
                 const pa = num(priceAInput), pb = num(priceBInput);
+                const maxA = sourceMax();
                 let err = '';
-                if (a > holdingsA + 1e-9) {
-                    err = 'You only hold ' + formatCryptoJS(holdingsA) + ' ' + symA + '.';
+                if (a > maxA + 1e-9) {
+                    err = 'You only have ' + formatCryptoJS(maxA) + ' ' + symA
+                        + (window._hasBanks ? ' in the selected bank.' : '.');
                 } else if ((a > 0 || b > 0) && (pa <= 0 || pb <= 0)) {
                     err = 'Enter a price for both tokens (open Advanced pricing).';
                 }
@@ -1407,10 +1457,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             maxBtn.addEventListener('click', () => {
                 syncing = true;
-                amountAInput.value = holdingsA > 0 ? trimNum(holdingsA) : '';
+                const maxA = sourceMax();
+                amountAInput.value = maxA > 0 ? trimNum(maxA) : '';
                 recalcFromA();
                 syncing = false; afterAnyChange();
             });
+
+            // Re-cap and re-validate when the source wallet changes.
+            if (sourceBankSelect) {
+                sourceBankSelect.addEventListener('change', () => {
+                    syncing = true;
+                    const maxA = sourceMax();
+                    if (num(amountAInput) > maxA) {
+                        amountAInput.value = maxA > 0 ? trimNum(maxA) : '';
+                        recalcFromA();
+                    }
+                    syncing = false; afterAnyChange();
+                });
+            }
 
             async function fetchPrices(cmcIds) {
                 try {
@@ -1456,7 +1520,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 priceBInput.value = '';
                 ratioInput.value  = '';
                 amountBInput.value = '';
-                amountAInput.value = holdingsA > 0 ? trimNum(holdingsA) : '';
+                const maxA = sourceMax();
+                amountAInput.value = maxA > 0 ? trimNum(maxA) : '';
                 errorLine.style.display = 'none';
                 if (advanced) advanced.open = false;
 
@@ -1484,7 +1549,7 @@ document.addEventListener('DOMContentLoaded', () => {
             form.addEventListener('submit', e => {
                 const a = num(amountAInput), b = num(amountBInput);
                 const pa = num(priceAInput), pb = num(priceBInput);
-                if (!(a > 0 && b > 0 && pa > 0 && pb > 0) || a > holdingsA + 1e-9) {
+                if (!(a > 0 && b > 0 && pa > 0 && pb > 0) || a > sourceMax() + 1e-9) {
                     e.preventDefault();
                     validate();
                 }

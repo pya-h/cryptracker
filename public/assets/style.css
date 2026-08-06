@@ -1726,3 +1726,101 @@ form .btn { margin-top: 1.2rem; }
     .profit { color: #008040 !important; }
     .loss   { color: #cc0000 !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Banks (wallet segmentation) — collapsed section on token pages
+   ═══════════════════════════════════════════════════════════════ */
+
+.banks-wrap { margin: 1.5rem 0; }
+
+.banks-details {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color var(--transition);
+}
+.banks-details[open] { border-color: var(--border-hover); }
+
+.banks-summary {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.banks-summary::-webkit-details-marker { display: none; }
+.banks-summary-title { font-weight: 600; font-size: 1.05rem; }
+.banks-summary-sub { color: var(--text-muted); font-size: .85rem; }
+.banks-caret { margin-left: auto; color: var(--text-muted); transition: transform var(--transition); }
+.banks-details[open] .banks-caret { transform: rotate(180deg); }
+
+.banks-panel { padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--border); }
+.banks-intro { color: var(--text-muted); font-size: .87rem; margin: 1rem 0; line-height: 1.5; }
+.banks-intro strong { color: var(--text); }
+
+.bank-list { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.25rem; }
+.bank-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: .7rem .9rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.bank-name { font-weight: 500; display: flex; align-items: center; gap: .5rem; }
+.bank-badge {
+    font-size: .65rem; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--primary); background: var(--primary-glow);
+    padding: .1rem .4rem; border-radius: 4px;
+}
+.bank-amount { color: var(--text); font-variant-numeric: tabular-nums; }
+.bank-value { color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 5rem; text-align: right; }
+.bank-del-form { margin: 0; }
+.bank-del-btn {
+    width: 26px; height: 26px; line-height: 1;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: transparent; color: var(--text-muted);
+    cursor: pointer; font-size: 1.1rem;
+    transition: all var(--transition);
+}
+.bank-del-btn:hover { color: var(--red); border-color: var(--red); background: var(--red-bg); }
+.bank-del-spacer { width: 26px; }
+
+.bank-actions { display: flex; flex-direction: column; gap: 1rem; }
+.bank-add-form, .bank-move-form { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.bank-add-form input[type="text"],
+.bank-move-form input[type="number"] {
+    flex: 1 1 10rem; min-width: 8rem;
+    padding: .55rem .75rem;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+}
+.bank-move-title { color: var(--text-muted); font-size: .85rem; font-weight: 500; }
+.bank-move-arrow { color: var(--text-muted); }
+.bank-move-form select.bank-select { flex: 1 1 8rem; }
+
+/* Wallet selector shared style (trade forms + move form) */
+.bank-select {
+    padding: .55rem .75rem;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    transition: border-color var(--transition);
+}
+.bank-select:focus { outline: none; border-color: var(--primary); }
+.bank-hint { display: block; color: var(--text-muted); font-size: .78rem; margin-top: .3rem; }
+
+/* Swap modal: from/into bank selectors side by side */
+.swap-banks { display: flex; gap: .75rem; margin-bottom: 1rem; }
+.swap-bank-field { flex: 1; display: flex; flex-direction: column; gap: .3rem; }
+.swap-bank-field .bank-select { width: 100%; }
+
+@media (max-width: 560px) {
+    .bank-row { grid-template-columns: 1fr auto auto; }
+    .bank-value { grid-column: 2 / 4; text-align: left; min-width: 0; }
+    .swap-banks { flex-direction: column; }
+}
