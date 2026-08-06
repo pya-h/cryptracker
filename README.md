@@ -123,6 +123,7 @@ cryptracker/                        # ← project root (repo)
 │   ├── transaction.php             # Buy/sell POST handler
 │   ├── swap.php                    # Token-to-token conversion POST handler
 │   ├── undo.php                    # Undo-last-action POST handler
+│   ├── bank.php                    # Banks (wallets) create/delete/move handler
 │   ├── add_token.php               # Add token POST handler
 │   ├── remove_token.php            # Remove token POST handler
 │   ├── search_tokens.php           # AJAX coin search endpoint
@@ -155,13 +156,14 @@ cryptracker/                        # ← project root (repo)
     │   ├── sqlite_db.php           # SQLite storage implementation
     │   ├── json_db.php             # JSON flat-file storage implementation
     │   ├── auth.php                # Register, login, logout, current user
-    │   ├── helpers.php             # Wrapper — loads 6 sub-modules ↓
+    │   ├── helpers.php             # Wrapper — loads 10 sub-modules ↓
     │   │   └── helpers/
     │   │       ├── security.php    # CSRF tokens, XSS escaping, headers
     │   │       ├── formatting.php  # USD, crypto, P/L, percent formatting
     │   │       ├── preferences.php # Theme, precision, P/L mode, source
     │   │       ├── pl_engine.php   # FIFO & weighted-average P/L calc
     │   │       ├── swap.php        # Value-conserving token-to-token conversion
+    │   │       ├── bank.php        # Banks (wallets) — display-only holdings segmentation
     │   │       ├── currency.php    # Display-currency conversion (USD → Toman/EUR/…)
     │   │       ├── undo.php        # Single-step undo of the last buy/sell/swap
     │   │       ├── flash.php       # Flash message system
@@ -178,8 +180,9 @@ cryptracker/                        # ← project root (repo)
     ├── tools/
     │   └── generate_pwa_icons.php  # Pure-PHP PWA icon generator (no image libs)
     │
-    ├── tests/                      # 146 tests / 481 assertions
-    │   ├── run.php                 # Test runner (autodiscovers Test*.php)
+    ├── tests/                      # 146 tests / 481 assertions (JSON + SQLite)
+    │   ├── run.php                 # Test runner (autodiscovers Test*.php; DB_BACKEND-aware)
+    │   ├── run.sh                  # Runs the suite against both JSON & SQLite backends
     │   ├── TestAuth.php            # Authentication tests
     │   ├── TestDb.php              # Database layer tests
     │   ├── TestPL.php              # P/L calculation tests (FIFO + AVG)
