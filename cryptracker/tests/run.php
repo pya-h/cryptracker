@@ -74,7 +74,7 @@ define('APP_BASE_PATH', __DIR__ . '/tmp_test_data');
 if (is_dir(APP_BASE_PATH)) {
     array_map('unlink', glob(APP_BASE_PATH . '/database/*.json'));
     array_map('unlink', glob(APP_BASE_PATH . '/database/*.tmp.*'));
-    array_map('unlink', glob(APP_BASE_PATH . '/database/*.sqlite'));
+    array_map('unlink', glob(APP_BASE_PATH . '/database/*.sqlite*'));
     @rmdir(APP_BASE_PATH . '/database');
     @unlink(APP_BASE_PATH . '/.env');
     @rmdir(APP_BASE_PATH);
@@ -97,7 +97,27 @@ if (session_status() === PHP_SESSION_NONE) {
 /* ── Load application code ──────────────────────────────────── */
 
 require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/json_db.php';
+
+/* Storage backend under test. Defaults to JSON; set DB_BACKEND=sqlite to run
+ * the identical suite against the SQLite backend. The SQLite pass self-skips
+ * (exit 0) when the pdo_sqlite driver is unavailable so it never blocks CI on a
+ * machine that only ships JSON support. Use tests/run.sh to run both. */
+$backend = strtolower((string) (getenv('DB_BACKEND') ?: 'json'));
+
+if ($backend === 'sqlite') {
+    $hasDriver = class_exists('PDO') && in_array('sqlite', PDO::getAvailableDrivers(), true);
+    if (!$hasDriver) {
+        echo "\n⚠  SKIPPING SQLite backend — pdo_sqlite is not available in this PHP CLI.\n";
+        echo "   Enable it (e.g. `sudo apt install php" . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . "-sqlite3`)\n";
+        echo "   to exercise the SQLite path; the JSON pass already covers the same logic.\n\n";
+        exit(0);
+    }
+    require_once __DIR__ . '/../includes/sqlite_db.php';
+} else {
+    $backend = 'json';
+    require_once __DIR__ . '/../includes/json_db.php';
+}
+
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/api.php';
@@ -106,7 +126,8 @@ require_once __DIR__ . '/../includes/api.php';
 
 echo "\n╔══════════════════════════════════════════════╗\n";
 echo "║       CrypTracker Test Suite                 ║\n";
-echo "╚══════════════════════════════════════════════╝\n\n";
+echo "╚══════════════════════════════════════════════╝\n";
+echo "  Storage backend: " . strtoupper($backend) . "\n\n";
 
 $testFiles = glob(__DIR__ . '/Test*.php');
 sort($testFiles);

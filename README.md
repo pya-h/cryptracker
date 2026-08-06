@@ -201,8 +201,19 @@ cryptracker/                        # ← project root (repo)
 ## Running Tests
 
 ```bash
-php cryptracker/tests/run.php
+php cryptracker/tests/run.php        # JSON backend (default)
 ```
+
+Or run the identical suite against **both** storage backends:
+
+```bash
+cryptracker/tests/run.sh             # JSON + SQLite
+```
+
+`run.sh` runs `run.php` once per backend. The JSON pass always runs; the SQLite
+pass (`DB_BACKEND=sqlite`) self-skips with a notice when the `pdo_sqlite` driver
+isn't installed, so it stays green on JSON-only machines and gives full
+dual-backend coverage anywhere `pdo_sqlite` is present (CI, production hosts).
 
 Tests use an isolated temporary data directory and clean up after themselves.
 
