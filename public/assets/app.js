@@ -38,10 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
        confirms in a styled modal. Plain form.submit() on confirm bypasses
        this handler, so there is no re-entrancy. */
 
-    (() => {
-        const forms = document.querySelectorAll('form[data-confirm]');
-        if (!forms.length) return;
-
+    const appConfirm = (() => {
         let overlay = null, msgEl = null, yesBtn = null, pending = null;
 
         function build() {
@@ -62,20 +59,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
             overlay.querySelectorAll('[data-c-cancel]').forEach(b => b.addEventListener('click', close));
-            yesBtn.addEventListener('click', () => { const f = pending; close(); if (f) f.submit(); });
+            yesBtn.addEventListener('click', () => { const cb = pending; close(); if (cb) cb(); });
             document.addEventListener('keydown', e => {
                 if (!overlay.classList.contains('open')) return;
                 if (e.key === 'Escape') close();
                 else if (e.key === 'Enter') { e.preventDefault(); yesBtn.click(); }
             });
-        }
-
-        function open(form) {
-            if (!overlay) build();
-            pending = form;
-            msgEl.textContent = form.dataset.confirm || 'Are you sure?';
-            overlay.classList.add('open');
-            requestAnimationFrame(() => { overlay.style.opacity = '1'; yesBtn.focus(); });
         }
         function close() {
             pending = null;
@@ -84,10 +73,18 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => overlay.classList.remove('open'), 250);
         }
 
-        forms.forEach(form => {
-            form.addEventListener('submit', e => { e.preventDefault(); open(form); });
-        });
+        return (message, onYes) => {
+            if (!overlay) build();
+            pending = onYes;
+            msgEl.textContent = message || 'Are you sure?';
+            overlay.classList.add('open');
+            requestAnimationFrame(() => { overlay.style.opacity = '1'; yesBtn.focus(); });
+        };
     })();
+
+    document.querySelectorAll('form[data-confirm]').forEach(form => {
+        form.addEventListener('submit', e => { e.preventDefault(); appConfirm(form.dataset.confirm, () => form.submit()); });
+    });
 
     /* ── User Context Menu ────────────────────────────────── */
 
@@ -355,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const price = q ? (q.price || 0) : 0;
                 const value = (parseFloat(t.amount) || 0) * price;
                 total += value;
-                return { symbol: t.symbol, name: t.name, amount: t.amount, price, value };
+                return { id: t.id, cmc_id: t.cmc_id, symbol: t.symbol, name: t.name, amount: t.amount, price, value };
             });
             bank._priced = priced;
             bank._total = total;
@@ -834,20 +831,124 @@ document.addEventListener('DOMContentLoaded', () => {
         renderBankOverviewValues(); // paint counts / empty banks before first quote
 
         const bankOvModal = document.getElementById('bankOverviewModal');
+        const moveModal   = document.getElementById('bankMoveModal');
+
+        const closeBankOvModal = () => {
+            if (!bankOvModal) return;
+            bankOvModal.style.opacity = '0';
+            setTimeout(() => bankOvModal.classList.remove('open'), 250);
+        };
+
+        // ── Move flow ─────────────────────────────────────────────
+        let moveFrom = null, moveToken = null, moveAvail = 0;
+
+        if (moveModal) {
+            const step1     = document.getElementById('bankMoveStep1');
+            const moveForm  = document.getElementById('bankMoveForm');
+            const targetsEl = document.getElementById('bankMoveTargets');
+            const amountEl  = document.getElementById('bankMoveAmount');
+            const errorEl   = document.getElementById('bankMoveError');
+            const submitBtn = document.getElementById('bankMoveSubmit');
+
+            const closeMove = () => {
+                moveModal.style.opacity = '0';
+                setTimeout(() => moveModal.classList.remove('open'), 250);
+            };
+
+            const validateMove = () => {
+                const a = parseFloat(amountEl.value) || 0;
+                if (a > moveAvail + 1e-9) {
+                    errorEl.textContent = 'You only have ' + formatCryptoJS(moveAvail) + ' ' + moveToken.symbol + ' in ' + moveFrom.name + '.';
+                    errorEl.style.display = '';
+                    submitBtn.disabled = true;
+                    return false;
+                }
+                errorEl.style.display = 'none';
+                submitBtn.disabled = !(a > 0);
+                return a > 0;
+            };
+
+            window._openBankMove = (fromBank, token) => {
+                moveFrom = fromBank;
+                moveToken = token;
+                moveAvail = parseFloat(token.amount) || 0;
+
+                document.getElementById('bankMoveSym').textContent  = token.symbol;
+                document.getElementById('bankMoveSym2').textContent = token.symbol;
+                document.getElementById('bankMoveFromName').textContent  = fromBank.name;
+                document.getElementById('bankMoveFromName2').textContent = fromBank.name;
+                document.getElementById('bankMoveAvail').textContent = formatCryptoJS(moveAvail) + ' ' + token.symbol;
+                document.getElementById('bankMoveTokenId').value = token.id;
+                document.getElementById('bankMoveFromId').value  = fromBank.id;
+
+                targetsEl.innerHTML = '';
+                bankOv.filter(b => b.id !== fromBank.id).forEach(b => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'bank-move-target';
+                    btn.innerHTML = '<span>' + esc(b.name) + '</span>'
+                        + (b.is_default ? '<span class="bank-badge">default</span>' : '');
+                    btn.addEventListener('click', () => {
+                        document.getElementById('bankMoveToId').value = b.id;
+                        document.getElementById('bankMoveToName').textContent = b.name;
+                        amountEl.value = '';
+                        errorEl.style.display = 'none';
+                        submitBtn.disabled = true;
+                        step1.style.display = 'none';
+                        moveForm.style.display = '';
+                        amountEl.focus();
+                    });
+                    targetsEl.appendChild(btn);
+                });
+
+                step1.style.display = '';
+                moveForm.style.display = 'none';
+                errorEl.style.display = 'none';
+
+                closeBankOvModal();
+                moveModal.classList.add('open');
+                requestAnimationFrame(() => { moveModal.style.opacity = '1'; });
+            };
+
+            moveForm.querySelectorAll('.bank-move-pcts button').forEach(b => {
+                b.addEventListener('click', () => {
+                    const v = moveAvail * (parseFloat(b.dataset.pct) || 0);
+                    amountEl.value = v > 0 ? parseFloat(v.toFixed(12)).toString() : '';
+                    validateMove();
+                });
+            });
+            amountEl.addEventListener('input', validateMove);
+            moveForm.addEventListener('submit', e => { if (!validateMove()) e.preventDefault(); });
+
+            document.getElementById('bankMoveBack').addEventListener('click', () => {
+                moveForm.style.display = 'none';
+                step1.style.display = '';
+            });
+            document.getElementById('bankMoveCancel1').addEventListener('click', closeMove);
+            document.getElementById('bankMoveClose').addEventListener('click', closeMove);
+            moveModal.addEventListener('click', e => { if (e.target === moveModal) closeMove(); });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && moveModal.classList.contains('open')) closeMove();
+            });
+        }
+
+        // ── Per-bank breakdown modal ──────────────────────────────
         if (bankOvModal) {
             const body    = document.getElementById('bankOvModalBody');
             const nameEl  = document.getElementById('bankOvModalName');
             const totalEl = document.getElementById('bankOvModalTotal');
+            const delForm = document.getElementById('bankOvDeleteForm');
+            const delId   = document.getElementById('bankOvDeleteId');
 
             const openBank = bank => {
                 const dec = getPrec();
-                const priced = (bank._priced || bank.tokens.map(t => ({ symbol: t.symbol, name: t.name, amount: t.amount, price: 0, value: 0 })))
+                const priced = (bank._priced || bank.tokens.map(t => ({ id: t.id, symbol: t.symbol, name: t.name, amount: t.amount, price: 0, value: 0 })))
                     .slice().sort((a, b) => b.value - a.value);
                 nameEl.textContent = bank.name;
                 totalEl.textContent = formatUSD(bank._total || 0, dec);
                 body.innerHTML = '';
                 if (!priced.length) {
-                    body.innerHTML = '<tr><td colspan="4" class="bank-ov-empty">This wallet holds no tokens.</td></tr>';
+                    body.innerHTML = '<tr><td colspan="5" class="bank-ov-empty">This wallet holds no tokens.</td></tr>';
                 } else {
                     priced.forEach(t => {
                         const tr = document.createElement('tr');
@@ -855,16 +956,35 @@ document.addEventListener('DOMContentLoaded', () => {
                             '<td><strong>' + esc(t.symbol) + '</strong><small>' + esc(t.name) + '</small></td>'
                             + '<td>' + formatCryptoJS(parseFloat(t.amount) || 0) + '</td>'
                             + '<td>' + (t.price > 0 ? formatUSD(t.price, dec) : '—') + '</td>'
-                            + '<td>' + (t.price > 0 ? formatUSD(t.value, dec) : '—') + '</td>';
+                            + '<td>' + (t.price > 0 ? formatUSD(t.value, dec) : '—') + '</td>'
+                            + '<td class="bank-ov-move-cell"></td>';
+                        if (moveModal && window._openBankMove) {
+                            const mb = document.createElement('button');
+                            mb.type = 'button';
+                            mb.className = 'bank-move-btn';
+                            mb.title = 'Move to another wallet';
+                            mb.setAttribute('aria-label', 'Move ' + t.symbol);
+                            mb.innerHTML = '&#8594;';
+                            mb.addEventListener('click', () => window._openBankMove(bank, t));
+                            tr.querySelector('.bank-ov-move-cell').appendChild(mb);
+                        }
                         body.appendChild(tr);
                     });
                 }
+
+                // Offer deletion only for an empty, non-default wallet.
+                if (delForm) {
+                    if (!bank.is_default && priced.length === 0) {
+                        delId.value = bank.id;
+                        delForm.dataset.confirm = 'Remove the bank "' + bank.name + '"? It must be empty of every token first.';
+                        delForm.style.display = '';
+                    } else {
+                        delForm.style.display = 'none';
+                    }
+                }
+
                 bankOvModal.classList.add('open');
                 requestAnimationFrame(() => { bankOvModal.style.opacity = '1'; });
-            };
-            const closeBankOvModal = () => {
-                bankOvModal.style.opacity = '0';
-                setTimeout(() => bankOvModal.classList.remove('open'), 250);
             };
 
             document.querySelectorAll('.bank-ov-card').forEach(card => {

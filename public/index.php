@@ -53,6 +53,7 @@ if ($hasBanks) {
         foreach (bankBreakdownForToken($user['id'], (int) $s['token']['id'], $s['holdings']) as $bd) {
             if ($bd['amount'] <= BANK_EPS || !isset($byId[$bd['id']])) continue;
             $byId[$bd['id']]['tokens'][] = [
+                'id'     => (int) $s['token']['id'],
                 'cmc_id' => (int) $s['token']['cmc_id'],
                 'symbol' => $s['token']['symbol'],
                 'name'   => $s['token']['name'],
@@ -199,11 +200,59 @@ layoutNav($user);
                 <div class="table-responsive">
                     <table class="token-table bank-ov-table">
                         <thead>
-                            <tr><th>Token</th><th>Amount</th><th>Price</th><th>Value</th></tr>
+                            <tr><th>Token</th><th>Amount</th><th>Price</th><th>Value</th><th aria-label="Actions"></th></tr>
                         </thead>
                         <tbody id="bankOvModalBody"></tbody>
                     </table>
                 </div>
+                <form method="POST" action="bank.php" id="bankOvDeleteForm" class="bank-ov-delete" style="display:none" data-confirm="Remove this bank?">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="return_id" value="0">
+                    <input type="hidden" name="bank_id" id="bankOvDeleteId" value="">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete this bank</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="bankMoveModal">
+        <div class="modal animate-scale-in">
+            <div class="modal-header">
+                <h2>Move <span id="bankMoveSym">&mdash;</span></h2>
+                <button type="button" class="modal-close" id="bankMoveClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="bankMoveStep1">
+                    <p class="bank-move-avail">From <strong id="bankMoveFromName">&mdash;</strong> &middot; available <span id="bankMoveAvail">&mdash;</span></p>
+                    <p class="bank-move-choose">Choose a destination wallet:</p>
+                    <div class="bank-move-targets" id="bankMoveTargets"></div>
+                    <div class="bank-move-actions">
+                        <button type="button" class="btn btn-outline btn-sm" id="bankMoveCancel1">Cancel</button>
+                    </div>
+                </div>
+                <form method="POST" action="bank.php" id="bankMoveForm" style="display:none">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="move">
+                    <input type="hidden" name="return_id" value="0">
+                    <input type="hidden" name="token_id"     id="bankMoveTokenId" value="">
+                    <input type="hidden" name="from_bank_id" id="bankMoveFromId"  value="">
+                    <input type="hidden" name="to_bank_id"   id="bankMoveToId"    value="">
+                    <p class="bank-move-route"><strong id="bankMoveFromName2">&mdash;</strong> <span aria-hidden="true">&rarr;</span> <strong id="bankMoveToName">&mdash;</strong></p>
+                    <label for="bankMoveAmount">Amount (<span id="bankMoveSym2">&mdash;</span>)</label>
+                    <input type="number" step="any" min="0" name="amount" id="bankMoveAmount" placeholder="0.00" autocomplete="off" inputmode="decimal">
+                    <div class="bank-move-pcts">
+                        <button type="button" data-pct="0.25">25%</button>
+                        <button type="button" data-pct="0.5">50%</button>
+                        <button type="button" data-pct="0.75">75%</button>
+                        <button type="button" data-pct="1">Max</button>
+                    </div>
+                    <p class="bank-move-error" id="bankMoveError" style="display:none"></p>
+                    <div class="bank-move-actions">
+                        <button type="button" class="btn btn-outline btn-sm" id="bankMoveBack">Back</button>
+                        <button type="submit" class="btn btn-primary btn-sm" id="bankMoveSubmit">Move</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

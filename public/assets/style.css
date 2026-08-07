@@ -1677,6 +1677,7 @@ form .btn { margin-top: 1.2rem; }
     .navbar { padding: .7rem 1rem; }
     .container { padding: 1rem 1rem 2rem; }
     .portfolio-summary { grid-template-columns: 1fr 1fr; }
+    .banks-card { grid-column: 1 / -1; }   /* span full width, no empty gap */
     .trade-forms { grid-template-columns: 1fr; }
     .swap-tokens { grid-template-columns: 1fr; }
     .swap-info-flow { grid-template-columns: 1fr; }
@@ -1901,7 +1902,9 @@ main.container[data-page="dashboard"] { max-width: 1440px; }
     border-radius: var(--radius-sm); padding: .5rem .7rem; color: var(--text);
     transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
 }
-.bank-ov-card:hover { border-color: var(--primary); transform: translateX(2px); box-shadow: 0 2px 12px var(--primary-glow); }
+/* z-index lifts the hovered row (and its popover) above later sibling rows —
+   without it the transform's stacking context traps the popover underneath. */
+.bank-ov-card:hover { border-color: var(--primary); transform: translateX(2px); box-shadow: 0 2px 12px var(--primary-glow); z-index: 41; }
 .bank-ov-name { font-weight: 600; font-size: .85rem; display: flex; align-items: center; gap: .35rem; min-width: 0; }
 .bank-ov-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bank-ov-value { font-size: .95rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -1929,6 +1932,55 @@ main.container[data-page="dashboard"] { max-width: 1440px; }
 .bank-ov-modal-icon { color: var(--primary); }
 .bank-ov-table td small { display: block; color: var(--text-muted); font-size: .76rem; }
 .bank-ov-empty { text-align: center; color: var(--text-muted); font-style: italic; padding: 1.2rem !important; }
+
+/* Move asset between wallets (from the breakdown modal) */
+.bank-ov-move-cell { width: 1%; text-align: right; }
+.bank-move-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; padding: 0; font-size: .95rem; line-height: 1;
+    color: var(--primary); background: transparent;
+    border: 1px solid var(--primary); border-radius: 999px;
+    cursor: pointer; transition: background .15s, color .15s, transform .15s;
+}
+.bank-move-btn:hover { background: var(--primary); color: #fff; transform: translateX(2px); }
+.bank-ov-delete { margin-top: 1.1rem; display: flex; justify-content: flex-end; }
+
+.bank-move-avail, .bank-move-choose { font-size: .86rem; color: var(--text-muted); }
+.bank-move-avail strong { color: var(--text); }
+.bank-move-choose { margin: 1rem 0 .55rem; }
+.bank-move-route { text-align: center; margin: .2rem 0 1.1rem; font-size: 1.02rem; color: var(--text-muted); }
+.bank-move-route strong { color: var(--text); font-weight: 700; }
+.bank-move-targets { display: flex; flex-direction: column; gap: .5rem; }
+.bank-move-target {
+    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+    text-align: left; cursor: pointer; color: var(--text);
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: .65rem .85rem;
+    font-weight: 600; font-size: .9rem;
+    transition: border-color var(--transition), transform var(--transition);
+}
+.bank-move-target:hover { border-color: var(--primary); transform: translateX(2px); }
+#bankMoveForm label { display: block; font-size: .82rem; color: var(--text-muted); margin-bottom: .35rem; }
+#bankMoveForm input[type="number"] {
+    width: 100%; padding: .6rem .8rem;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+}
+#bankMoveForm input[type="number"]:focus { outline: none; border-color: var(--primary); }
+.bank-move-pcts { display: flex; gap: .5rem; margin: .7rem 0 0; }
+.bank-move-pcts button {
+    flex: 1; padding: .4rem 0; font-size: .8rem; font-weight: 600;
+    background: var(--bg-input); border: 1px solid var(--border);
+    color: var(--text-muted); border-radius: var(--radius-sm); cursor: pointer;
+    transition: all var(--transition);
+}
+.bank-move-pcts button:hover { color: var(--primary); border-color: var(--primary); }
+.bank-move-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.3rem; }
+.bank-move-error {
+    margin-top: .8rem; color: var(--red); font-size: .82rem;
+    background: var(--red-bg); border: 1px solid rgba(255,92,108,.3);
+    border-radius: var(--radius-sm); padding: .55rem .8rem;
+}
 
 /* ── Confirmation modal ───────────────────────────────────── */
 
