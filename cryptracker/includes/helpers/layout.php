@@ -121,6 +121,7 @@ function layoutCustomizeModal(array $user, string $redirect): void
     $thm = theme();
     $prec = precision();
     $wz   = worthlessZeros();
+    $sci  = scientificNotation();
     $src = priceSource();
 
     $curSel = currencyActiveCode();
@@ -178,6 +179,10 @@ function layoutCustomizeModal(array $user, string $redirect): void
                     <label class="wz-checkbox">
                         <input type="checkbox" name="worthless_zeros" value="1"' . ($wz ? ' checked' : '') . '>
                         <span>Worthless Zeros</span>
+                    </label>
+                    <label class="wz-checkbox">
+                        <input type="checkbox" name="scientific" value="1"' . ($sci ? ' checked' : '') . '>
+                        <span>Scientific Notation (K/M/B, m/u/n)</span>
                     </label>
                     <button type="submit" class="btn btn-primary btn-sm" style="margin-top:.5rem">Apply</button>
                 </form>

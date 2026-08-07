@@ -1,8 +1,8 @@
 <?php
 /**
  * AJAX endpoint — fetch live prices for tracked tokens.
- * GET ?ids=90,80,48543  (comma-separated CoinLore IDs)
- * Returns JSON: { "90": { "price": 95432.10, "percent_change_24h": 1.23 }, ... }
+ * GET ?ids=1,1027,825  (comma-separated CMC IDs)
+ * Returns JSON: { quotes: { "<cmcId>": { price, percent_change_24h, … } }, meta: {…} }
  */
 
 require_once __DIR__ . '/../cryptracker/includes/auth.php';

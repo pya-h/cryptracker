@@ -247,13 +247,17 @@ function currencyDisplay(): array
  */
 function currencyWrap(float $value, int $decimals, array $cur, bool $pl): string
 {
-    $num  = number_format(abs($value), $decimals);
+    if (scientificNotation() && ($u = compactMagnitude(abs($value))) !== null) {
+        $num = trimZeros(number_format(abs($value) / $u[0], precision())) . $u[1];
+    } else {
+        $num = trimZeros(number_format(abs($value), $decimals));
+    }
     $core = ($cur['pos'] === 'suffix') ? ($num . ' ' . $cur['symbol']) : ($cur['symbol'] . $num);
 
     if ($pl) {
-        return trimZeros(($value >= 0 ? '+' : '-') . $core);
+        return ($value >= 0 ? '+' : '-') . $core;
     }
-    return trimZeros(($value < 0 ? '-' : '') . $core);
+    return ($value < 0 ? '-' : '') . $core;
 }
 
 /**

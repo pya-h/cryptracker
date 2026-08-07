@@ -37,6 +37,7 @@ layoutNav($user);
     <main class="container" data-page="dashboard"
           data-precision="<?= precision() ?>"
           data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
+          data-scientific="<?= scientificNotation() ? '1' : '0' ?>"
           <?= currencyDataAttrs() ?>
           <?= !empty($summaries) ? 'data-deferred-prices="1"' : '' ?>>
 

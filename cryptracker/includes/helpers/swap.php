@@ -80,8 +80,21 @@ function swapTokens(int $userId, int $sourceId, int $targetId, float $amountA, f
     $noteSell = '⇄ Swapped to '   . $tokenB['symbol'];
     $noteBuy  = '⇄ Swapped from ' . $tokenA['symbol'];
 
-    $sellId = dbInsertTransaction($sourceId, 'sell', $amountA, $priceA, $valueA, $realizedPL, $noteSell);
-    $buyId  = dbInsertTransaction($targetId, 'buy',  $amountB, $priceB, $valueB, 0.0,        $noteBuy);
+    // Snapshot of the swap at the moment it happened, stored identically on both
+    // legs so either token's history can render the full "what was exchanged" view.
+    $meta = json_encode(['swap' => [
+        'from_symbol' => $tokenA['symbol'],
+        'from_amount' => $amountA,
+        'from_price'  => $priceA,
+        'to_symbol'   => $tokenB['symbol'],
+        'to_amount'   => $amountB,
+        'to_price'    => $priceB,
+        'value_usd'   => $valueA,
+        'realized_pl' => $realizedPL,
+    ]], JSON_UNESCAPED_UNICODE);
+
+    $sellId = dbInsertTransaction($sourceId, 'sell', $amountA, $priceA, $valueA, $realizedPL, $noteSell, $meta);
+    $buyId  = dbInsertTransaction($targetId, 'buy',  $amountB, $priceB, $valueB, 0.0,        $noteBuy,  $meta);
 
     // Move the source wallet's balance out and the target wallet's balance in.
     $bankOps = array_merge(

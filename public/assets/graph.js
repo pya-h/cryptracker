@@ -68,12 +68,41 @@
             };
         }
 
+        /* Scientific-notation helpers — mirror of app.js / formatting.php so the
+           axis and tooltip stay in step with the tables when it's enabled. */
+        function _sci() {
+            const m = document.querySelector('main[data-page]');
+            return !!m && m.dataset.scientific === '1';
+        }
+        function _compactUnit(abs) {
+            if (!(abs > 0) || !isFinite(abs)) return null;
+            if (abs >= 1e12) return { div: 1e12, suf: 'T' };
+            if (abs >= 1e9)  return { div: 1e9, suf: 'B' };
+            if (abs >= 1e6)  return { div: 1e6, suf: 'M' };
+            if (abs >= 1e3)  return { div: 1e3, suf: 'K' };
+            if (abs >= 0.01) return null;
+            if (abs >= 1e-3) return { div: 1e-3, suf: 'm' };
+            if (abs >= 1e-6) return { div: 1e-6, suf: 'u' };
+            return { div: 1e-9, suf: 'n' };
+        }
+        /* Compact number for a non-negative value, or null in the plain band /
+           when Scientific is off — callers then keep their normal formatting. */
+        function _compactStr(absVal) {
+            if (!_sci()) return null;
+            const u = _compactUnit(absVal);
+            if (!u) return null;
+            const m = document.querySelector('main[data-page]');
+            const p = (m && parseInt(m.dataset.precision)) || 3;
+            return (absVal / u.div).toFixed(p).replace(/0+$/, '').replace(/\.$/, '') + u.suf;
+        }
+
         /* Format value for tooltip */
         function fmtVal(v) {
             const c = _cur();
             const val = v * c.factor;
             const dec = (c.decimals !== null) ? c.decimals : 2;
-            const s = Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+            const s = _compactStr(Math.abs(val))
+                || Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
             const body = (c.pos === 'suffix') ? (s + ' ' + c.symbol) : (c.symbol + s);
             return (val >= 0 ? '+' : '-') + body;
         }
@@ -177,7 +206,9 @@
                 ctx.font = '11px Inter, sans-serif';
                 ctx.textAlign = 'right';
                 const _c = _cur();
-                const _av = (val * _c.factor).toFixed(_c.decimals !== null ? _c.decimals : 2);
+                const _v = val * _c.factor;
+                const _dec = _c.decimals !== null ? _c.decimals : 2;
+                const _av = (_v < 0 ? '-' : '') + (_compactStr(Math.abs(_v)) || Math.abs(_v).toFixed(_dec));
                 ctx.fillText(_c.pos === 'suffix' ? (_av + ' ' + _c.symbol) : (_c.symbol + _av), pad.left - 8, y + 4);
             }
 

@@ -193,14 +193,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = document.querySelector('main[data-page]');
         return (m && parseInt(m.dataset.precision)) || 3;
     }
+    function sci() {
+        const m = document.querySelector('main[data-page]');
+        return !!m && m.dataset.scientific === '1';
+    }
+    // Mirror of compactMagnitude() in formatting.php.
+    function compactUnit(abs) {
+        if (!(abs > 0) || !isFinite(abs)) return null;
+        if (abs >= 1e12) return { div: 1e12, suf: 'T' };
+        if (abs >= 1e9)  return { div: 1e9, suf: 'B' };
+        if (abs >= 1e6)  return { div: 1e6, suf: 'M' };
+        if (abs >= 1e3)  return { div: 1e3, suf: 'K' };
+        if (abs >= 0.01) return null;
+        if (abs >= 1e-3) return { div: 1e-3, suf: 'm' };
+        if (abs >= 1e-6) return { div: 1e-6, suf: 'u' };
+        return { div: 1e-9, suf: 'n' };
+    }
     function curFmt(vUSD, isPL, dec) {
         const c = cur();
         const val = (vUSD || 0) * c.factor;
-        const d = (c.decimals !== null) ? c.decimals : (dec != null ? dec : curBasePrec());
-        const num = Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+        let num, u;
+        if (sci() && (u = compactUnit(Math.abs(val)))) {
+            const p = curBasePrec();
+            num = trimZerosJS((Math.abs(val) / u.div).toLocaleString('en-US', { minimumFractionDigits: p, maximumFractionDigits: p })) + u.suf;
+        } else {
+            const d = (c.decimals !== null) ? c.decimals : (dec != null ? dec : curBasePrec());
+            num = trimZerosJS(Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }));
+        }
         const body = (c.pos === 'suffix') ? (num + ' ' + c.symbol) : (c.symbol + num);
-        if (isPL) return trimZerosJS((val >= 0 ? '+' : '-') + body);
-        return trimZerosJS((val < 0 ? '-' : '') + body);
+        if (isPL) return (val >= 0 ? '+' : '-') + body;
+        return (val < 0 ? '-' : '') + body;
     }
 
     function countUp(el) {
@@ -361,8 +383,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatCryptoJS(v) {
-        const dec = getPrec();
-        const maxDec = Math.max(dec, 8);
+        let u;
+        if (sci() && (u = compactUnit(Math.abs(v)))) {
+            const mant = trimZerosJS((Math.abs(v) / u.div).toLocaleString('en-US', { minimumFractionDigits: getPrec(), maximumFractionDigits: getPrec() }));
+            return (v < 0 ? '-' : '') + mant + u.suf;
+        }
+        const maxDec = Math.max(getPrec(), 8);
         let s = v.toFixed(maxDec);
         s = s.replace(/0+$/, '');
         if (s.endsWith('.')) s = s.slice(0, -1);
@@ -1554,4 +1580,64 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     }
+
+    /* ═══════════════════════════════════════════════════════
+       ── Swap-details modal ───────────────────────────────
+       A swap chip (⇄ SYMBOL in the history / analytics tables)
+       carries the moment-in-time snapshot in data-swap; clicking
+       it opens this shared modal. Prices/values respect the active
+       currency and formatting just like the rest of the page.
+       ═══════════════════════════════════════════════════════ */
+
+    const swapInfoOverlay = document.getElementById('swapInfoOverlay');
+    if (swapInfoOverlay) {
+        const set = (id, text, cls) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = text;
+            if (cls !== undefined) el.className = cls;
+        };
+        const closeInfo = () => {
+            swapInfoOverlay.style.opacity = '0';
+            setTimeout(() => swapInfoOverlay.classList.remove('open'), 250);
+        };
+
+        const openInfo = data => {
+            const fromAmt = parseFloat(data.from_amount) || 0;
+            const toAmt   = parseFloat(data.to_amount) || 0;
+            const fromPr  = parseFloat(data.from_price) || 0;
+            const toPr    = parseFloat(data.to_price) || 0;
+            const pl      = parseFloat(data.realized_pl) || 0;
+
+            set('swiFromAmt', formatCryptoJS(fromAmt) + ' ' + (data.from_symbol || ''));
+            set('swiFromPrice', 'at ' + formatUSD(fromPr, priceDecJS()) + ' each');
+            set('swiToAmt', formatCryptoJS(toAmt) + ' ' + (data.to_symbol || ''));
+            set('swiToPrice', 'at ' + formatUSD(toPr, priceDecJS()) + ' each');
+            set('swiValue', formatUSD(parseFloat(data.value_usd) || 0, priceDecJS()));
+            set('swiPl', formatPLJS(pl, getPrec()), 'swap-info-figure ' + plClassJS(pl));
+            set('swiRate', fromAmt > 0
+                ? '1 ' + (data.from_symbol || '') + ' = ' + formatCryptoJS(toAmt / fromAmt) + ' ' + (data.to_symbol || '')
+                : '—');
+            set('swiDate', data.date || '');
+
+            swapInfoOverlay.classList.add('open');
+            requestAnimationFrame(() => { swapInfoOverlay.style.opacity = '1'; });
+        };
+
+        document.querySelectorAll('.swap-chip').forEach(chip => {
+            chip.addEventListener('click', e => {
+                e.stopPropagation();
+                try { openInfo(JSON.parse(chip.dataset.swap || '{}')); } catch (_) {}
+            });
+        });
+
+        const closeInfoBtn = document.getElementById('closeSwapInfo');
+        if (closeInfoBtn) closeInfoBtn.addEventListener('click', closeInfo);
+        swapInfoOverlay.addEventListener('click', e => { if (e.target === swapInfoOverlay) closeInfo(); });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && swapInfoOverlay.classList.contains('open')) closeInfo();
+        });
+    }
+
+    function priceDecJS() { return Math.max(getPrec(), 2); }
 });

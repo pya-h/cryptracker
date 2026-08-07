@@ -33,6 +33,7 @@ switch ($action) {
         $p = max(2, min(10, $p));
         $_SESSION['precision'] = $p;
         $_SESSION['worthless_zeros'] = isset($_POST['worthless_zeros']);
+        $_SESSION['scientific'] = isset($_POST['scientific']);
         flash('success', "Precision set to $p decimal digits.");
         break;
 

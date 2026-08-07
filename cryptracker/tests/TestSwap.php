@@ -121,6 +121,29 @@ function test_swap_notes_recorded(): void
     dbPurgeAll();
 }
 
+function test_swap_metadata_recorded(): void
+{
+    [$uid, $a, $b] = _swapSetup('meta');
+    dbInsertTransaction($a, 'buy', 5.0, 10.0, 50.0, 0.0);
+
+    $res = swapTokens($uid, $a, $b, 2.0, 4.0, 10.0, 5.0, 'avg');
+    assert_true($res['ok'], 'swap ok');
+
+    $sellTx = dbGetTransactions($a);
+    $meta = json_decode(end($sellTx)['metadata'] ?? '', true);
+    assert_true(is_array($meta) && !empty($meta['swap']), 'sell leg carries swap metadata');
+    assert_equals('BTC', $meta['swap']['from_symbol'], 'from_symbol stored');
+    assert_equals('ETH', $meta['swap']['to_symbol'], 'to_symbol stored');
+    assert_equals(4.0, (float) $meta['swap']['to_amount'], 'to_amount stored');
+
+    // The buy leg carries the same snapshot so the target token can render it too.
+    $buyTx = dbGetTransactions($b);
+    $buyMeta = json_decode(end($buyTx)['metadata'] ?? '', true);
+    assert_equals('BTC', $buyMeta['swap']['from_symbol'] ?? '', 'buy leg mirrors metadata');
+
+    dbPurgeAll();
+}
+
 function test_swap_rejects_over_holdings(): void
 {
     [$uid, $a, $b] = _swapSetup('4');

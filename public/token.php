@@ -20,6 +20,25 @@ $marketCap = 0; $volume24 = 0; $csupply = 0; $tsupply = 0; $msupply = 0; $rank =
 $allTxAsc = dbGetTransactions($tokenId);
 $allTx    = array_reverse($allTxAsc);
 
+/* Swap legs carry a JSON snapshot in `metadata`; decode it (adding a display
+   date) for the "⇄" chips and the swap-details modal. Legs recorded before this
+   feature have no metadata and simply fall back to their plain note. */
+$swapChipData = function (array $tx): ?array {
+    if (empty($tx['metadata'])) return null;
+    $m = json_decode((string) $tx['metadata'], true);
+    if (!is_array($m) || empty($m['swap']) || !is_array($m['swap'])) return null;
+    $s = $m['swap'];
+    $s['date'] = date('M d, Y H:i', strtotime($tx['created_at']));
+    return $s;
+};
+
+$swapByKey = [];
+foreach ($allTxAsc as $t) {
+    $s = $swapChipData($t);
+    if ($s !== null) $swapByKey[$t['created_at'] . '|' . $t['type'] . '|' . $t['amount']] = $s;
+}
+$hasSwaps = !empty($swapByKey);
+
 /* Which transaction row (if any) shown on this page is the user's last,
    undoable action. A swap has one leg per token, so at most one row matches. */
 $undoable  = getUndoableAction($user['id']);
@@ -99,6 +118,7 @@ layoutNav($user);
           data-current-price="<?= $price ?>"
           data-precision="<?= precision() ?>"
           data-worthless-zeros="<?= worthlessZeros() ? '1' : '0' ?>"
+          data-scientific="<?= scientificNotation() ? '1' : '0' ?>"
           <?= currencyDataAttrs() ?>
           data-pl-timeline="<?= e(json_encode($plTimeline)) ?>"
           data-transactions="<?= e(json_encode($allTxAsc)) ?>"
@@ -413,6 +433,7 @@ layoutNav($user);
                     </thead>
                     <tbody>
                         <?php foreach ($plTimeline as $row): ?>
+                        <?php $rowSwap = $swapByKey[$row['date'] . '|' . $row['type'] . '|' . $row['amount']] ?? null; ?>
                         <tr>
                             <td><?= date('M d, Y H:i', strtotime($row['date'])) ?></td>
                             <td>
@@ -420,6 +441,9 @@ layoutNav($user);
                                 <span class="badge badge-<?= $row['type'] ?>">
                                     <?= $isBuy ? '+' : '-' ?><?= formatCrypto($row['amount']) ?>
                                 </span>
+                                <?php if ($rowSwap !== null): ?>
+                                <button type="button" class="swap-chip swap-chip-icon" data-swap="<?= e(json_encode($rowSwap)) ?>" title="Swap details" aria-label="Swap details">&#8646;</button>
+                                <?php endif; ?>
                             </td>
                             <td><?= formatMoney($row['ppu']) ?></td>
                             <td><?= formatMoney($row['total']) ?></td>
@@ -478,6 +502,7 @@ layoutNav($user);
                             <th>Price/Unit</th>
                             <th>Total</th>
                             <th>Realized P/L</th>
+                            <th aria-label="Actions"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -486,20 +511,17 @@ layoutNav($user);
                             $txKey = $tx['created_at'] . '|' . $tx['type'] . '|' . $tx['amount'];
                             $txPL  = $txPLMap[$txKey] ?? $tx['realized_pl'];
                             $isUndoable = isset($undoIds[(int) $tx['id']]);
+                            $txSwap = $swapChipData($tx);
                         ?>
                         <tr<?= $isUndoable ? ' class="tx-undoable"' : '' ?>>
                             <td><?= date('M d, Y H:i', strtotime($tx['created_at'])) ?></td>
                             <td>
                                 <span class="badge badge-<?= $tx['type'] ?>"><?= ucfirst($tx['type']) ?></span>
-                                <?php if (!empty($tx['note'])): ?><small class="tx-note"><?= e($tx['note']) ?></small><?php endif; ?>
-                                <?php if ($isUndoable): ?>
-                                <form method="POST" action="undo.php" class="undo-form"
-                                      onsubmit="return confirm('Undo this <?= e($undoKind) ?>? This permanently removes the record<?= $undoPlural ? 's for both tokens' : '' ?>.');">
-                                    <?= csrfField() ?>
-                                    <input type="hidden" name="return_id" value="<?= (int) $tokenId ?>">
-                                    <button type="submit" class="undo-btn" title="Undo this <?= e($undoKind) ?>" aria-label="Undo this <?= e($undoKind) ?>">&#8634; Undo</button>
-                                </form>
-                                <?php endif; ?>
+                                <?php if ($txSwap !== null): ?>
+                                <button type="button" class="swap-chip" data-swap="<?= e(json_encode($txSwap)) ?>" title="Swap details">
+                                    <span class="swap-chip-icon">&#8646;</span><?= e($tx['type'] === 'sell' ? $txSwap['to_symbol'] : $txSwap['from_symbol']) ?>
+                                </button>
+                                <?php elseif (!empty($tx['note'])): ?><small class="tx-note"><?= e($tx['note']) ?></small><?php endif; ?>
                             </td>
                             <td><?= formatCrypto($tx['amount']) ?></td>
                             <td><?= formatMoney($tx['price_per_unit']) ?></td>
@@ -509,6 +531,16 @@ layoutNav($user);
                                     <?= formatMoneyPL($txPL) ?>
                                 <?php else: ?>
                                     –
+                                <?php endif; ?>
+                            </td>
+                            <td class="tx-action">
+                                <?php if ($isUndoable): ?>
+                                <form method="POST" action="undo.php" class="undo-form"
+                                      onsubmit="return confirm('Undo this <?= e($undoKind) ?>? This permanently removes the record<?= $undoPlural ? 's for both tokens' : '' ?>.');">
+                                    <?= csrfField() ?>
+                                    <input type="hidden" name="return_id" value="<?= (int) $tokenId ?>">
+                                    <button type="submit" class="undo-btn" title="Undo this <?= e($undoKind) ?>" aria-label="Undo this <?= e($undoKind) ?>">&#8634;</button>
+                                </form>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -527,6 +559,38 @@ layoutNav($user);
             </form>
         </section>
     </main>
+
+    <?php if ($hasSwaps): ?>
+    <div class="modal-overlay" id="swapInfoOverlay">
+        <div class="modal modal-swap-info animate-scale-in">
+            <div class="modal-header">
+                <h2><span class="swap-info-head-icon">&#8646;</span> Swap details</h2>
+                <button type="button" class="modal-close" id="closeSwapInfo">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="swap-info-flow">
+                    <div class="swap-info-side">
+                        <span class="swap-info-role">Gave</span>
+                        <strong id="swiFromAmt">&mdash;</strong>
+                        <span id="swiFromPrice" class="swap-info-sub">&mdash;</span>
+                    </div>
+                    <span class="swap-info-arrow" aria-hidden="true">&#8594;</span>
+                    <div class="swap-info-side">
+                        <span class="swap-info-role">Received</span>
+                        <strong id="swiToAmt">&mdash;</strong>
+                        <span id="swiToPrice" class="swap-info-sub">&mdash;</span>
+                    </div>
+                </div>
+                <div class="swap-info-rows">
+                    <div><span>Value</span><strong id="swiValue" class="swap-info-figure">&mdash;</strong></div>
+                    <div><span>Realized P/L</span><strong id="swiPl" class="swap-info-figure">&mdash;</strong></div>
+                    <div><span>Rate</span><strong id="swiRate" class="swap-info-figure">&mdash;</strong></div>
+                    <div><span>Date</span><strong id="swiDate" class="swap-info-figure">&mdash;</strong></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <?php if (!empty($swapTargets)): ?>
     <div class="modal-overlay" id="swapOverlay">

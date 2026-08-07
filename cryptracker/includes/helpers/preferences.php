@@ -18,6 +18,11 @@ function worthlessZeros(): bool
     return (bool) ($_SESSION['worthless_zeros'] ?? false);
 }
 
+function scientificNotation(): bool
+{
+    return (bool) ($_SESSION['scientific'] ?? false);
+}
+
 function trimZeros(string $s): string
 {
     if (worthlessZeros()) return $s;

@@ -104,6 +104,9 @@ function dbEnsureSchema(PDO $pdo): void
     if (!isset($txExisting['note'])) {
         $pdo->exec('ALTER TABLE transactions ADD COLUMN note TEXT NULL');
     }
+    if (!isset($txExisting['metadata'])) {
+        $pdo->exec('ALTER TABLE transactions ADD COLUMN metadata TEXT NULL');
+    }
 
     // Banks: global per-user wallets that segment holdings (see helpers/bank.php).
     $pdo->exec('CREATE TABLE IF NOT EXISTS banks (
@@ -284,15 +287,16 @@ function dbGetTransactionsDesc(int $userTokenId): array
     return $stmt->fetchAll();
 }
 
-function dbInsertTransaction(int $userTokenId, string $type, float $amount, float $ppu, float $totalValue, float $realizedPL, ?string $note = null): int
+function dbInsertTransaction(int $userTokenId, string $type, float $amount, float $ppu, float $totalValue, float $realizedPL, ?string $note = null, ?string $metadata = null): int
 {
     if (!in_array($type, ['buy', 'sell'], true)) {
         throw new InvalidArgumentException("Transaction type must be 'buy' or 'sell'");
     }
 
     $note = ($note !== null && trim($note) !== '') ? trim($note) : null;
+    $metadata = ($metadata !== null && trim($metadata) !== '') ? $metadata : null;
 
-    $stmt = dbPdo()->prepare('INSERT INTO transactions (user_token_id, type, amount, price_per_unit, total_value, realized_pl, note, created_at) VALUES (:ut, :ty, :am, :ppu, :tv, :rp, :note, :ca)');
+    $stmt = dbPdo()->prepare('INSERT INTO transactions (user_token_id, type, amount, price_per_unit, total_value, realized_pl, note, metadata, created_at) VALUES (:ut, :ty, :am, :ppu, :tv, :rp, :note, :meta, :ca)');
     $stmt->execute([
         ':ut' => $userTokenId,
         ':ty' => $type,
@@ -301,6 +305,7 @@ function dbInsertTransaction(int $userTokenId, string $type, float $amount, floa
         ':tv' => $totalValue,
         ':rp' => $realizedPL,
         ':note' => $note,
+        ':meta' => $metadata,
         ':ca' => date('Y-m-d H:i:s'),
     ]);
 

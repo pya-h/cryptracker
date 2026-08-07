@@ -90,3 +90,36 @@ function test_format_supply_with_worthless_zeros(): void
     assert_equals('21.000M', formatSupply(21000000.0), 'Supply with worthless zeros');
     $_SESSION = [];
 }
+
+function test_format_crypto_scientific(): void
+{
+    $_SESSION = ['precision' => 2, 'worthless_zeros' => false, 'scientific' => true];
+    assert_equals('1.5K', formatCrypto(1500.0), 'thousands compact');
+    assert_equals('2M', formatCrypto(2.0e6), 'millions compact');
+    assert_equals('3.4B', formatCrypto(3.4e9), 'billions compact');
+    assert_equals('5m', formatCrypto(0.005), 'milli compact');
+    assert_equals('500u', formatCrypto(0.0005), 'micro compact');
+    assert_equals('500n', formatCrypto(0.0000005), 'nano compact');
+    assert_equals('1.5', formatCrypto(1.5), 'plain band unchanged');
+    assert_equals('-2.5K', formatCrypto(-2500.0), 'negative compact');
+    $_SESSION = [];
+}
+
+function test_format_crypto_scientific_off(): void
+{
+    $_SESSION = ['precision' => 2, 'worthless_zeros' => false];
+    assert_equals('1,500', formatCrypto(1500.0), 'no compact when off');
+    assert_equals('0.0005', formatCrypto(0.0005), 'tiny value untouched when off');
+    $_SESSION = [];
+}
+
+function test_format_money_scientific(): void
+{
+    $_SESSION = ['precision' => 2, 'worthless_zeros' => false, 'scientific' => true];
+    assert_equals('$1.5K', formatMoney(1500.0), 'money thousands compact');
+    assert_equals('$500u', formatMoney(0.0005), 'money micro compact');
+    assert_equals('$12.5', formatMoney(12.5), 'money plain band unchanged');
+    assert_equals('+$2.5K', formatMoneyPL(2500.0), 'positive P/L compact');
+    assert_equals('-$2.5K', formatMoneyPL(-2500.0), 'negative P/L compact');
+    $_SESSION = [];
+}
