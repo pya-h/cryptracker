@@ -16,7 +16,7 @@ csrfGuard();
 $action   = $_POST['action'] ?? '';
 $redirect = $_POST['redirect'] ?? 'index.php';
 $allowed  = ['index.php'];
-if (preg_match('/^token\.php\?id=\d+$/', $redirect)) {
+if (preg_match('/^token\.php\?id=\d+$/D', $redirect)) {
     $allowed[] = $redirect;
 }
 $target = in_array($redirect, $allowed) ? $redirect : 'index.php';

@@ -40,7 +40,11 @@ function geckoGetCoinList(): array
         return $mem;
     }
 
-    file_put_contents($cacheFile, json_encode($list), LOCK_EX);
+    // Atomic write so a concurrent reader can't decode a partial file.
+    $tmp = $cacheFile . '.tmp.' . getmypid();
+    if (@file_put_contents($tmp, json_encode($list)) !== false) {
+        @rename($tmp, $cacheFile);
+    }
     $mem = $list;
     return $mem;
 }

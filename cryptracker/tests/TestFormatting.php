@@ -113,6 +113,21 @@ function test_format_crypto_scientific_off(): void
     $_SESSION = [];
 }
 
+function test_format_crypto_thousands_grouping(): void
+{
+    // Locks the grouping/zero-trim contract that app.js formatCryptoJS mirrors:
+    // thousands separators present, trailing zeros always stripped, sign kept.
+    $_SESSION = ['precision' => 2, 'worthless_zeros' => false];
+    assert_equals('1,234.5', formatCrypto(1234.5), 'grouped with one decimal');
+    assert_equals('-1,234.5', formatCrypto(-1234.5), 'negative grouped');
+    assert_equals('1,000,000', formatCrypto(1000000.0), 'millions grouped, no decimals');
+    assert_equals('0.00000012', formatCrypto(0.00000012), 'sub-unit kept to 8 dp');
+    // worthless_zeros ON must NOT re-pad crypto amounts (formatCrypto always trims).
+    $_SESSION = ['precision' => 2, 'worthless_zeros' => true];
+    assert_equals('1,234.5', formatCrypto(1234.5), 'grouping stable with worthless-zeros on');
+    $_SESSION = [];
+}
+
 function test_format_money_scientific(): void
 {
     $_SESSION = ['precision' => 2, 'worthless_zeros' => false, 'scientific' => true];

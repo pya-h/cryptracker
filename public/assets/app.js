@@ -483,11 +483,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const mant = trimZerosJS((Math.abs(v) / u.div).toLocaleString('en-US', { minimumFractionDigits: getPrec(), maximumFractionDigits: getPrec() }));
             return (v < 0 ? '-' : '') + mant + u.suf;
         }
+        // Mirror PHP formatCrypto(): number_format groups thousands and trims
+        // trailing zeros unconditionally. toLocaleString gives identical output
+        // (grouping + no trailing zeros) so live and server-rendered amounts match.
         const maxDec = Math.max(getPrec(), 8);
-        let s = v.toFixed(maxDec);
-        s = s.replace(/0+$/, '');
-        if (s.endsWith('.')) s = s.slice(0, -1);
-        return s;
+        return (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: maxDec });
     }
 
     function formatBigNumJS(v) {

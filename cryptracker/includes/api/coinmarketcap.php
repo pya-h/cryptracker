@@ -38,7 +38,12 @@ function cmcGetAllMap(): array
         return $mem;
     }
 
-    file_put_contents($cacheFile, json_encode($data), LOCK_EX);
+    // Atomic write: a concurrent reader must never observe a half-written file
+    // (which would decode to null → false "bad cache" → needless refetch).
+    $tmp = $cacheFile . '.tmp.' . getmypid();
+    if (@file_put_contents($tmp, json_encode($data)) !== false) {
+        @rename($tmp, $cacheFile);
+    }
     $mem = $data;
     return $mem;
 }

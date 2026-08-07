@@ -39,7 +39,11 @@ function coinloreGetAll(): array
     }
 
     if (!empty($all)) {
-        file_put_contents($cacheFile, json_encode($all), LOCK_EX);
+        // Atomic write so a concurrent reader can't decode a partial file.
+        $tmp = $cacheFile . '.tmp.' . getmypid();
+        if (@file_put_contents($tmp, json_encode($all)) !== false) {
+            @rename($tmp, $cacheFile);
+        }
     }
 
     $mem = $all;
