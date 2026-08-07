@@ -201,7 +201,7 @@ layoutNav($user);
                             <span class="bank-value" data-bank-value>&mdash;</span>
                             <?php if (!$b['is_default']): ?>
                             <form method="POST" action="bank.php" class="bank-del-form"
-                                  onsubmit="return confirm('Remove the bank &quot;<?= e($b['name']) ?>&quot;? It must be empty of every token first.');">
+                                  data-confirm="Remove the bank &quot;<?= e($b['name']) ?>&quot;? It must be empty of every token first.">
                                 <?= csrfField() ?>
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="bank_id" value="<?= (int) $b['id'] ?>">
@@ -536,7 +536,7 @@ layoutNav($user);
                             <td class="tx-action">
                                 <?php if ($isUndoable): ?>
                                 <form method="POST" action="undo.php" class="undo-form"
-                                      onsubmit="return confirm('Undo this <?= e($undoKind) ?>? This permanently removes the record<?= $undoPlural ? 's for both tokens' : '' ?>.');">
+                                      data-confirm="Undo this <?= e($undoKind) ?>? This permanently removes the record<?= $undoPlural ? 's for both tokens' : '' ?>.">
                                     <?= csrfField() ?>
                                     <input type="hidden" name="return_id" value="<?= (int) $tokenId ?>">
                                     <button type="submit" class="undo-btn" title="Undo this <?= e($undoKind) ?>" aria-label="Undo this <?= e($undoKind) ?>">&#8634;</button>
@@ -552,7 +552,7 @@ layoutNav($user);
         </section>
 
         <section class="danger-zone">
-            <form method="POST" action="remove_token.php" onsubmit="return confirm('Remove this token and all its transactions?');">
+            <form method="POST" action="remove_token.php" data-confirm="Remove this token and all its transactions?">
                 <?= csrfField() ?>
                 <input type="hidden" name="id" value="<?= (int)$token['id'] ?>">
                 <button type="submit" class="btn btn-danger">Remove Token</button>

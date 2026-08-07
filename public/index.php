@@ -107,10 +107,24 @@ layoutNav($user);
                 <span class="summary-value <?= plClass($totalRealPL) ?>"><?= formatMoneyPL($totalRealPL) ?></span>
                 <?php endif; ?>
             </div>
+            <?php if ($hasBanks): ?>
+            <div class="summary-card banks-card stagger-5">
+                <span class="summary-label">&#127974; Banks</span>
+                <div class="bank-ov-list">
+                    <?php foreach ($bankOverview as $bk): ?>
+                    <button type="button" class="bank-ov-card" data-bank-id="<?= (int) $bk['id'] ?>">
+                        <span class="bank-ov-name">
+                            <span class="bank-ov-name-text"><?= e($bk['name']) ?></span>
+                            <?php if ($bk['is_default']): ?><span class="bank-badge">default</span><?php endif; ?>
+                        </span>
+                        <span class="bank-ov-value" data-bank-ov-value><span class="loading-skeleton loading-inline">&mdash;</span></span>
+                        <span class="bank-ov-pop" data-bank-ov-pop></span>
+                    </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
         </section>
-
-        <div class="dashboard-grid<?= $hasBanks ? ' has-aside' : '' ?>">
-        <div class="dashboard-main">
 
         <section class="add-token-section">
             <h2>Add Token</h2>
@@ -168,32 +182,6 @@ layoutNav($user);
             </div>
             <?php endif; ?>
         </section>
-
-        </div>
-
-        <?php if ($hasBanks): ?>
-        <aside class="bank-overview animate-fade-in-up">
-            <h2>&#127974; Banks</h2>
-            <p class="bank-ov-intro">Your holdings across wallets. Hover for the top tokens, click for the full breakdown.</p>
-            <div class="bank-ov-list">
-                <?php foreach ($bankOverview as $bk): $n = count($bk['tokens']); ?>
-                <button type="button" class="bank-ov-card" data-bank-id="<?= (int) $bk['id'] ?>">
-                    <span class="bank-ov-head">
-                        <span class="bank-ov-name">
-                            <?= e($bk['name']) ?>
-                            <?php if ($bk['is_default']): ?><span class="bank-badge">default</span><?php endif; ?>
-                        </span>
-                        <span class="bank-ov-count"><?= $n ?> token<?= $n === 1 ? '' : 's' ?></span>
-                    </span>
-                    <span class="bank-ov-value" data-bank-ov-value><span class="loading-skeleton loading-inline">&mdash;</span></span>
-                    <span class="bank-ov-pop" data-bank-ov-pop></span>
-                </button>
-                <?php endforeach; ?>
-            </div>
-        </aside>
-        <?php endif; ?>
-
-        </div>
     </main>
 
     <?php if ($hasBanks): ?>

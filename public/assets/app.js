@@ -33,6 +33,62 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    /* ── Confirmation modal (replaces the native confirm dialog) ──────
+       Any <form data-confirm="message"> defers submission until the user
+       confirms in a styled modal. Plain form.submit() on confirm bypasses
+       this handler, so there is no re-entrancy. */
+
+    (() => {
+        const forms = document.querySelectorAll('form[data-confirm]');
+        if (!forms.length) return;
+
+        let overlay = null, msgEl = null, yesBtn = null, pending = null;
+
+        function build() {
+            overlay = document.createElement('div');
+            overlay.className = 'modal-overlay confirm-overlay';
+            overlay.innerHTML =
+                '<div class="modal confirm-modal animate-scale-in" role="alertdialog" aria-modal="true">'
+              + '<div class="modal-header"><h2>Please confirm</h2>'
+              + '<button type="button" class="modal-close" data-c-cancel aria-label="Cancel">&times;</button></div>'
+              + '<div class="modal-body"><p class="confirm-message"></p>'
+              + '<div class="confirm-actions">'
+              + '<button type="button" class="btn btn-outline" data-c-cancel>Cancel</button>'
+              + '<button type="button" class="btn btn-confirm" data-c-yes>Confirm</button>'
+              + '</div></div></div>';
+            document.body.appendChild(overlay);
+            msgEl  = overlay.querySelector('.confirm-message');
+            yesBtn = overlay.querySelector('[data-c-yes]');
+
+            overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+            overlay.querySelectorAll('[data-c-cancel]').forEach(b => b.addEventListener('click', close));
+            yesBtn.addEventListener('click', () => { const f = pending; close(); if (f) f.submit(); });
+            document.addEventListener('keydown', e => {
+                if (!overlay.classList.contains('open')) return;
+                if (e.key === 'Escape') close();
+                else if (e.key === 'Enter') { e.preventDefault(); yesBtn.click(); }
+            });
+        }
+
+        function open(form) {
+            if (!overlay) build();
+            pending = form;
+            msgEl.textContent = form.dataset.confirm || 'Are you sure?';
+            overlay.classList.add('open');
+            requestAnimationFrame(() => { overlay.style.opacity = '1'; yesBtn.focus(); });
+        }
+        function close() {
+            pending = null;
+            if (!overlay) return;
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.classList.remove('open'), 250);
+        }
+
+        forms.forEach(form => {
+            form.addEventListener('submit', e => { e.preventDefault(); open(form); });
+        });
+    })();
+
     /* ── User Context Menu ────────────────────────────────── */
 
     const menuBtn  = document.getElementById('userMenuBtn');
@@ -311,9 +367,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const pop = card.querySelector('[data-bank-ov-pop]');
             if (pop) {
-                if (!bank.tokens.length) { pop.innerHTML = '<span class="bank-ov-pop-more">No holdings</span>'; return; }
+                const n = bank.tokens.length;
+                const head = '<span class="bank-ov-pop-head">' + n + ' token' + (n === 1 ? '' : 's') + '</span>';
+                if (!n) { pop.innerHTML = head + '<span class="bank-ov-pop-more">No holdings</span>'; return; }
                 const top = priced.slice().sort((a, b) => b.value - a.value).slice(0, 3);
-                pop.innerHTML = top.map(t =>
+                pop.innerHTML = head + top.map(t =>
                     '<span class="bank-ov-pop-row"><span>' + esc(t.symbol) + '</span><span>'
                     + (hasQuotes ? formatUSD(t.value, dec) : '—') + '</span></span>'
                 ).join('') + (priced.length > 3 ? '<span class="bank-ov-pop-more">+' + (priced.length - 3) + ' more</span>' : '');
