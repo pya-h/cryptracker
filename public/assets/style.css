@@ -1877,3 +1877,67 @@ form .btn { margin-top: 1.2rem; }
     .bank-value { grid-column: 2 / 4; text-align: left; min-width: 0; }
     .swap-banks { flex-direction: column; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Dashboard banks overview (cross-token wallet composition, aside)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Transparent wrapper when there is no aside — layout stays as before. */
+.dashboard-grid { display: contents; }
+.dashboard-grid.has-aside {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 1.5rem;
+    align-items: start;
+}
+.dashboard-main { min-width: 0; }
+
+.bank-overview {
+    position: sticky; top: 1.5rem;
+    background: var(--bg-card); backdrop-filter: blur(12px);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1.1rem 1.2rem;
+}
+.bank-overview h2 { font-size: 1.05rem; font-weight: 600; margin-bottom: .35rem; }
+.bank-ov-intro { color: var(--text-muted); font-size: .8rem; line-height: 1.45; margin-bottom: .9rem; }
+
+.bank-ov-list { display: flex; flex-direction: column; gap: .6rem; }
+.bank-ov-card {
+    position: relative; text-align: left; cursor: pointer; width: 100%;
+    display: flex; flex-direction: column; gap: .35rem;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: .7rem .85rem; color: var(--text);
+    transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+.bank-ov-card:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 4px 18px var(--primary-glow); }
+.bank-ov-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.bank-ov-name { font-weight: 600; font-size: .9rem; display: flex; align-items: center; gap: .4rem; }
+.bank-ov-count { color: var(--text-muted); font-size: .72rem; white-space: nowrap; }
+.bank-ov-value { font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.bank-ov-pop {
+    display: none; position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + .35rem);
+    flex-direction: column; gap: .3rem;
+    background: var(--bg-card-solid); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); padding: .55rem .65rem;
+}
+.bank-ov-card:hover .bank-ov-pop { display: flex; }
+.bank-ov-pop-row { display: flex; justify-content: space-between; gap: 1rem; font-size: .76rem; }
+.bank-ov-pop-row span:first-child { color: var(--text-muted); font-weight: 600; }
+.bank-ov-pop-row span:last-child { font-variant-numeric: tabular-nums; }
+.bank-ov-pop-more { color: var(--text-muted); font-size: .72rem; text-align: center; }
+
+.bank-ov-modal-total {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin: .3rem 0 1rem; padding-bottom: .8rem; border-bottom: 1px solid var(--border);
+}
+.bank-ov-modal-total span { color: var(--text-muted); font-size: .85rem; }
+.bank-ov-modal-total strong { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bank-ov-modal-icon { color: var(--primary); }
+.bank-ov-table td small { display: block; color: var(--text-muted); font-size: .76rem; }
+.bank-ov-empty { text-align: center; color: var(--text-muted); font-style: italic; padding: 1.2rem !important; }
+
+@media (max-width: 900px) {
+    .dashboard-grid.has-aside { grid-template-columns: 1fr; }
+    .bank-overview { position: static; }
+}

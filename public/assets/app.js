@@ -281,6 +281,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const _bankBal = {};
     (window._banks || []).forEach(b => { _bankBal[String(b.id)] = parseFloat(b.amount) || 0; });
 
+    // Dashboard banks overview: cross-token wallet composition, valued live from
+    // the same quotes that drive the token table.
+    const bankOv = (page === 'dashboard' && Array.isArray(window._bankOverview)) ? window._bankOverview : null;
+    let _lastQuotes = {};
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+    function renderBankOverviewValues() {
+        if (!bankOv) return;
+        const dec = getPrec();
+        const hasQuotes = Object.keys(_lastQuotes).length > 0;
+        bankOv.forEach(bank => {
+            let total = 0;
+            const priced = bank.tokens.map(t => {
+                const q = _lastQuotes[t.cmc_id];
+                const price = q ? (q.price || 0) : 0;
+                const value = (parseFloat(t.amount) || 0) * price;
+                total += value;
+                return { symbol: t.symbol, name: t.name, amount: t.amount, price, value };
+            });
+            bank._priced = priced;
+            bank._total = total;
+
+            const card = document.querySelector('.bank-ov-card[data-bank-id="' + bank.id + '"]');
+            if (!card) return;
+            const valEl = card.querySelector('[data-bank-ov-value]');
+            if (valEl && (hasQuotes || bank.tokens.length === 0)) valEl.textContent = formatUSD(total, dec);
+
+            const pop = card.querySelector('[data-bank-ov-pop]');
+            if (pop) {
+                if (!bank.tokens.length) { pop.innerHTML = '<span class="bank-ov-pop-more">No holdings</span>'; return; }
+                const top = priced.slice().sort((a, b) => b.value - a.value).slice(0, 3);
+                pop.innerHTML = top.map(t =>
+                    '<span class="bank-ov-pop-row"><span>' + esc(t.symbol) + '</span><span>'
+                    + (hasQuotes ? formatUSD(t.value, dec) : '—') + '</span></span>'
+                ).join('') + (priced.length > 3 ? '<span class="bank-ov-pop-more">+' + (priced.length - 3) + ' more</span>' : '');
+            }
+        });
+    }
+
     function getPrec() {
         return parseInt(main.dataset.precision) || 3;
     }
@@ -477,6 +517,9 @@ document.addEventListener('DOMContentLoaded', () => {
             sumTotalEl.className = 'summary-value ' + plClassJS(sumTotal);
             flashEl(sumTotalEl);
         }
+
+        _lastQuotes = quotes;
+        renderBankOverviewValues();
     }
 
     function updateTokenPage(quotes) {
@@ -725,6 +768,61 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gatherCmcIds().length > 0) {
         refreshPrices();
         setInterval(refreshPrices, 10000);
+    }
+
+    /* ── Dashboard banks overview: hover popover + per-bank modal ────── */
+
+    if (bankOv) {
+        renderBankOverviewValues(); // paint counts / empty banks before first quote
+
+        const bankOvModal = document.getElementById('bankOverviewModal');
+        if (bankOvModal) {
+            const body    = document.getElementById('bankOvModalBody');
+            const nameEl  = document.getElementById('bankOvModalName');
+            const totalEl = document.getElementById('bankOvModalTotal');
+
+            const openBank = bank => {
+                const dec = getPrec();
+                const priced = (bank._priced || bank.tokens.map(t => ({ symbol: t.symbol, name: t.name, amount: t.amount, price: 0, value: 0 })))
+                    .slice().sort((a, b) => b.value - a.value);
+                nameEl.textContent = bank.name;
+                totalEl.textContent = formatUSD(bank._total || 0, dec);
+                body.innerHTML = '';
+                if (!priced.length) {
+                    body.innerHTML = '<tr><td colspan="4" class="bank-ov-empty">This wallet holds no tokens.</td></tr>';
+                } else {
+                    priced.forEach(t => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML =
+                            '<td><strong>' + esc(t.symbol) + '</strong><small>' + esc(t.name) + '</small></td>'
+                            + '<td>' + formatCryptoJS(parseFloat(t.amount) || 0) + '</td>'
+                            + '<td>' + (t.price > 0 ? formatUSD(t.price, dec) : '—') + '</td>'
+                            + '<td>' + (t.price > 0 ? formatUSD(t.value, dec) : '—') + '</td>';
+                        body.appendChild(tr);
+                    });
+                }
+                bankOvModal.classList.add('open');
+                requestAnimationFrame(() => { bankOvModal.style.opacity = '1'; });
+            };
+            const closeBankOvModal = () => {
+                bankOvModal.style.opacity = '0';
+                setTimeout(() => bankOvModal.classList.remove('open'), 250);
+            };
+
+            document.querySelectorAll('.bank-ov-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const bank = bankOv.find(b => String(b.id) === card.dataset.bankId);
+                    if (bank) openBank(bank);
+                });
+            });
+
+            const closeBtn = document.getElementById('closeBankOv');
+            if (closeBtn) closeBtn.addEventListener('click', closeBankOvModal);
+            bankOvModal.addEventListener('click', e => { if (e.target === bankOvModal) closeBankOvModal(); });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && bankOvModal.classList.contains('open')) closeBankOvModal();
+            });
+        }
     }
 
     /* ── Display-currency switch (client-owned, cookie-persisted) ──────
